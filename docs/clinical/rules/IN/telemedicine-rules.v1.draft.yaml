@@ -1,0 +1,118 @@
+# India telemedicine prescribing rules: decision tables (DRAFT)
+# Story S-012. Source: Telemedicine Practice Guidelines 2020 (Appendix 5, IMC Regulations 2002, BoG notice 25 Mar 2020).
+# This file is the draft of country-pack data (config/country-packs/IN/rules/), loaded by the rules engine (S-138, S-099).
+# K-GLB-01: no drug lists, windows or messages in code; they live here.
+# K-CS-07: any change needs review by a registered doctor, recorded in the PR.
+# Every value marked "validate: true" must be checked against the primary guideline text before use.
+
+pack: IN
+ruleset: telemedicine-prescribing
+version: 1.0.0-draft
+status: draft            # draft -> doctor_reviewed -> approved
+source:
+  title: Telemedicine Practice Guidelines 2020
+  issued_by: Board of Governors in supersession of MCI (now NMC)
+  date: 2020-03-25
+  still_cited_as_of: 2026-10   # NMC notice, see docs/compliance-applicability.md (C09)
+reviewed_by: null        # registered doctor: name, registration number, council, date (K-CS-07)
+
+# ---------- Definitions ----------
+consult:
+  modes: [video, audio, text, in_person]
+  v1_enabled_modes: [video, audio, in_person]   # text consults are not in v1.0 scope (R-40)
+  # The mode used for prescribing is the mode in effect when the prescription is signed.
+  # A video consult that dropped to audio before signing is treated as audio.
+  mode_for_rules: mode_at_signing
+  types: [first, follow_up]
+  follow_up:
+    same_doctor: true
+    requires_prior_in_person_consult: true
+    window_days: 183                 # "within 6 months" of the previous in-person consult; validate: true
+    same_health_condition: doctor_attests
+    exclusions:                      # not a follow-up if any is true; doctor attests
+      - new_symptoms_outside_same_condition
+      - doctor_does_not_recall_previous_context
+    prior_in_person_evidence:        # how the engine knows an in-person consult happened
+      - platform_in_person_consult_record
+      - doctor_attestation_with_date  # off-platform visit; audited; open question Q2
+  initiators: [patient, doctor, caregiver, health_worker]
+
+# ---------- Drug categories ----------
+# Each drug in the drug master (S-126) gets one base category, curated and doctor-reviewed.
+# "List B" is contextual: an add-on medicine in a follow-up for the same condition.
+categories:
+  prohibited:
+    description: High potential of abuse. Never prescribed through telemedicine.
+    match:
+      regulatory_schedule: [X]               # Drugs and Cosmetics Rules 1945, Schedule X
+      ndps_controlled: true                  # NDPS Act 1985 narcotic or psychotropic substance
+  list_o:
+    description: Safe medicines, over-the-counter type (e.g. paracetamol, ORS), and medicines notified for public-health emergencies.
+    match:
+      curated: true                          # doctor-reviewed list in drugs/list_o.yaml (to be built in S-126)
+  list_a:
+    description: Relatively safe medicines with low abuse potential. First prescription only in a video consult; refills in a follow-up by any mode.
+    match:
+      curated: true
+  unclassified:
+    description: Drug not yet categorised by the clinical reviewer.
+    treat_as: list_a                         # proposal; open question Q1; validate: true
+
+# Platform policy stricter than the guidelines (C13; product non-goal):
+# Schedule X and NDPS drugs are blocked in every mode, including in-person consults written in the product.
+platform_policy:
+  block_prohibited_in_all_modes: true        # doctor to confirm (Q4)
+
+# ---------- Decision table ----------
+# Evaluated per prescription item. The first matching row wins. No match means block (fail closed).
+# context values: new_drug | refill (same drug previously prescribed to this patient by this doctor for this condition) | add_on (new drug for the same condition in a follow-up)
+rules:
+  - { id: R01, category: prohibited, consult_type: any, mode: any, context: any, outcome: block, reason: RX_PROHIBITED }
+  - { id: R02, category: any, consult_type: any, mode: in_person, context: any, outcome: allow, reason: null }   # telemedicine lists do not apply in person
+  - { id: R03, category: list_o, consult_type: first, mode: [video, audio, text], context: any, outcome: allow, reason: null }
+  - { id: R04, category: [list_a, unclassified], consult_type: first, mode: video, context: new_drug, outcome: allow, reason: null }
+  - { id: R05, category: [list_a, unclassified], consult_type: first, mode: [audio, text], context: any, outcome: block, reason: RX_NEEDS_VIDEO_FIRST }
+  - { id: R06, category: list_o, consult_type: follow_up, mode: [video, audio, text], context: any, outcome: allow, reason: null }
+  - { id: R07, category: [list_a, unclassified], consult_type: follow_up, mode: [video, audio, text], context: refill, outcome: allow, reason: null }
+  - { id: R08, category: [list_a, unclassified], consult_type: follow_up, mode: [video, audio, text], context: add_on, outcome: allow, reason: null }   # List B; validate: true
+  - { id: R09, category: [list_a, unclassified], consult_type: follow_up, mode: video, context: new_drug, outcome: allow, reason: null }   # new condition in a video consult behaves as a first consult on video; validate: true
+  - { id: R10, category: [list_a, unclassified], consult_type: follow_up, mode: [audio, text], context: new_drug, outcome: block, reason: RX_NEEDS_VIDEO_FIRST }
+
+# ---------- Prescription-level checks (all must pass before signing) ----------
+prescription_checks:
+  - { id: P01, check: doctor_verified_and_active, reason: RX_DOCTOR_NOT_VERIFIED }        # K-CS-01, C10
+  - { id: P02, check: patient_identity_confirmed_by_doctor, reason: RX_IDENTITY_NOT_CONFIRMED }
+  - { id: P03, check: patient_age_present, reason: RX_AGE_MISSING }
+  - { id: P04, check: teleconsult_consent_recorded, reason: RX_CONSENT_MISSING }          # implied (patient-initiated) or explicit
+  - { id: P05, check: diagnosis_or_provisional_diagnosis_present, reason: RX_DIAGNOSIS_MISSING }   # prescribing without one is misconduct
+  - { id: P06, check: follow_up_attestations_present_if_follow_up, reason: RX_FOLLOW_UP_NOT_ESTABLISHED }
+  - { id: P07, check: structured_dose_fields_complete, reason: RX_DOSE_INCOMPLETE }       # E-RX-02; never inferred (K-CS-03)
+
+consent:
+  implied_when_initiator: [patient]
+  explicit_when_initiator: [doctor, caregiver, health_worker]
+  explicit_forms: [in_app_tap, recorded_audio_or_video_statement, text_message]
+  record_fields: [booking_id, initiator, consent_type, time_utc, channel]
+
+identification:
+  patient_required: [name, age]
+  patient_one_of: [verified_phone, email, government_id_other_than_aadhaar_number]   # C23
+  doctor_display: [name, qualification, registration_number, council]               # shown at start, on profile and on the prescription
+  minors: not_supported_in_v1                                                         # founder decision 3; guidelines require an accompanying adult
+
+records:                                # doctor's duty, stored by the platform (RET-02)
+  keep: [consult_log, call_or_video_metadata, chat_transcript_if_text, images_shared, reports, prescription, consent_record]
+  video_recording: false
+  retention_rule: RET-02
+
+# ---------- Messages (i18n keys; English text for review) ----------
+reasons:
+  RX_PROHIBITED:            { key: rx.block.prohibited,       en: "This medicine cannot be prescribed in an online consultation (Schedule X or NDPS)." }
+  RX_NEEDS_VIDEO_FIRST:     { key: rx.block.needs_video,      en: "This medicine can be prescribed for the first time only in a video consultation. Switch to video or ask the patient to visit." }
+  RX_DOCTOR_NOT_VERIFIED:   { key: rx.block.doctor_unverified, en: "You can prescribe only when your registration is verified and active." }
+  RX_IDENTITY_NOT_CONFIRMED: { key: rx.block.identity,        en: "Confirm the patient's identity before signing." }
+  RX_AGE_MISSING:           { key: rx.block.age,              en: "Patient age is required on the prescription." }
+  RX_CONSENT_MISSING:       { key: rx.block.consent,          en: "The patient's consent to an online consultation is not recorded." }
+  RX_DIAGNOSIS_MISSING:     { key: rx.block.diagnosis,        en: "Add a diagnosis or provisional diagnosis before prescribing." }
+  RX_FOLLOW_UP_NOT_ESTABLISHED: { key: rx.block.follow_up,    en: "This counts as a follow-up only after an in-person visit with you in the last 6 months for the same condition." }
+  RX_DOSE_INCOMPLETE:       { key: rx.block.dose,             en: "Complete the dose, frequency and duration fields." }

@@ -12,6 +12,7 @@ files tell Claude and the team what to read and what to do.
 | [story-prompt-template.md](story-prompt-template.md) | The prompt used to start every story |
 | [code-review-prompt-template.md](code-review-prompt-template.md) | The prompt used to review every PR against the contracts |
 | [dry-run.md](dry-run.md) | First story run through both templates, with lessons |
+| [release-and-versioning.md](release-and-versioning.md) | Versions, release trains, store releases, feature flags, rollback (S-032) |
 
 ## The loop (from the Start Here sheet)
 1. Copy the story text, acceptance criteria, Contract refs and Edge case refs from the Backlog.

@@ -37,6 +37,16 @@
 
 **Open decision:** nurses are a primary role, but the nurse features are scheduled for v4.0. Decide before v1.0 scope is frozen whether to keep that order (nurse accounts and verification arrive with v4.0) or bring a smaller nurse feature forward.
 
+**Nurse role decision (S-031, 2026-11-15) — PROPOSED, awaiting founder:**
+
+| Option | What it means | For | Against |
+|---|---|---|---|
+| **A. Keep v4.0 (recommended)** | No nurse accounts, verification or features before v4.0. The v1.0 role model keeps "nurse" as a reserved role, so adding it later needs no redesign (S-106). Injection reminders still ship in v1.0 (F1.3 reminder part). | The v1.0 hypothesis (doctor prescriptions plus patient reminders) does not need nurses. Home nursing is regulated and operations-heavy (C26, C27; nursing council checks, the NUID vendor, home-visit safety). Keeps v1.0 small. | Nurses appear in the personas but get no value until v4.0. |
+| B. Clinic nurse as clinic staff in v1.1 | A clinic admin adds staff with a "nurse" label who can mark an injection as given at the clinic and record vitals, under the clinic's responsibility. Council registration is verified only if the label is shown to patients. | Small; adds data to the reminder loop (injection given) | Needs nurse verification rules earlier (C26); more roles to test; not needed for the v1.0 hypothesis |
+| C. Home sample collection staff in v2.0 | Not nurses: lab partners' phlebotomists, verified through the lab (F4-a) | Already planned | Does not answer the nurse question |
+
+**Recommendation: option A**, and review option B at the v1.1 scope check (S-192) using v0 and beta feedback. **Founder decision:** ☐ A ☐ B ☐ Other: ______ · Date: ______
+
 ## 3. Feature index: original list mapped to versions
 
 | ID | Original feature | First ships | Complete in |
@@ -405,6 +415,17 @@ These are not new features. The original features above depend on them.
 - Searching NABL-accredited labs: https://padd.qci.org.in/ck-docs/1643702010.How%20to%20search%20NABL%20Accredited%20Laboratories.pdf
 
 ## 8. Change log
+
+- **New story S-275 (2026-11-15):** Provider Agreement and privacy notice for doctors, clinics and clinic staff, found missing in S-010 and S-023. S-110, S-163 and S-188 now depend on it. Also from S-023: the IT Intermediary Rules amendment (in force 20 Feb 2026) cuts grievance resolution to 7 days; all patient-facing timelines now say 7 days.
+- **S-018 (doctor registration and conduct, 2026-11-15), not yet a version bump:** see `docs/clinical/doctor-registration-and-conduct.md`. Flagged, not changed, until the founder decides:
+  - Recommends dropping paid placement entirely (CD-05), which would replace the F15 line "Any paid placement is clearly labelled" (open decision 7).
+  - F17 specialty shown only with a recognised postgraduate qualification (RG-04); profiles are directory-style with no "best/top" claims or awards (CD-06).
+  - Marketing: no patient testimonials or doctor endorsements (CD-09, CD-10), so MK-05 and MK-10 need changing (open decision 8).
+- **S-008 review (compliance applicability, 2026-11-14), not yet a version bump:** see `docs/compliance-applicability.md`. Items below are flagged, not changed, until the founder decides.
+  - Section 4 F15 line "Any paid placement is clearly labelled" (and the same line in `docs/product-vision.md`) may conflict with the NMC advertising guidelines of 6 Oct 2026 (open decision 7).
+  - v0 and the waitlist handle personal data from week 2, so C01, C03, C06, C07, C10, C11, C14 and C22 are proposed as due at v0.
+  - v1.0 (about 2 May 2027) lands on the DPDP main-duties date (about 13 May 2027) (open decision 2).
+  - v1.0 has no rule for under-18 patients before family mode in v1.1 (open decision 3).
 
 - **v0.3:** Added F17 (verification pipeline for doctors, nurses, clinics and labs) at the founder's request, with an options analysis (section 7). Added section 2a defining the primary roles (Patient, Doctor, Nurse) and the supporting roles.
 - **v0.2:** Added F11–F16 after founder review (from suggestions S2, S3, S4, S6, S7 and S8).
