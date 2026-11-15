@@ -1,0 +1,74 @@
+# Lint fixture (S-038): must FAIL. Expected errors (one or more each), by rule:
+#   paths-versioned            /appointments (no /v1/)
+#   paths-kebab-case           /v1/AppointmentList
+#   properties-camel-case      Appointment.start_at
+#   post-idempotency-key       POST /v1/AppointmentList (no Idempotency-Key)
+#   idempotency-key-required-for-money-and-messages   POST /v1/payments (header present but not required)
+#   error-responses-problem-json  GET /appointments 404 uses application/json
+#   roles-declared             GET /appointments (no x-roles)
+#   no-offset-pagination       GET /appointments ?offset
+#   list-cursor-pagination     GET /appointments (items[] without limit/cursor)
+#   no-pii-in-query            GET /appointments ?phone
+#   money-is-integer           Appointment.amount is number
+#   timestamps-date-time       Appointment.createdAt has no date-time format
+#   operation-operationId      GET /appointments
+openapi: 3.1.0
+info:
+  title: Core API invalid fixture
+  version: 1.0.0
+  description: Breaks each custom rule once.
+  contact: { name: Platform team }
+servers:
+  - url: https://api.example.test
+tags:
+  - name: booking
+paths:
+  /appointments:
+    get:
+      summary: List
+      description: Breaks several rules.
+      tags: [booking]
+      parameters:
+        - { name: offset, in: query, schema: { type: integer } }
+        - { name: phone, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Appointment' } }
+        '404':
+          description: not found
+          content:
+            application/json:
+              schema: { type: object }
+  /v1/AppointmentList:
+    post:
+      operationId: createThing
+      description: No idempotency key.
+      tags: [booking]
+      x-roles: [patient]
+      responses:
+        '201': { description: created }
+  /v1/payments:
+    post:
+      operationId: createPayment
+      description: Money operation with an optional key.
+      tags: [booking]
+      x-roles: [patient]
+      x-side-effect: money
+      parameters:
+        - { name: Idempotency-Key, in: header, required: false, schema: { type: string } }
+      responses:
+        '201': { description: created }
+components:
+  schemas:
+    Appointment:
+      type: object
+      properties:
+        start_at: { type: string, format: date-time }
+        amount: { type: number }
+        createdAt: { type: string }

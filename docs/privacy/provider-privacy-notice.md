@@ -34,6 +34,25 @@
 | Complaints about you, and your responses | Grievance handling (C08, C19) | Legal duty | 3 years after closure (RET-09) |
 | Product usage (random code, no patient data) | Improve the product | Consent (optional) | 13 months (RET-11) |
 
+### 1a. Clinic staff (front desk, clinic admins who are not doctors)
+
+| Data | Why (purpose) | Basis [VALIDATE] | How long |
+|---|---|---|---|
+| Name, mobile number, work email (optional), role, clinic | Create the staff account the clinic asked for, sign in, limit access to the staff member's role (D-STAFF, K-SEC-04) | Consent at account activation (D-STAFF@1) | While the account is active; deleted when the clinic removes the staff member or 30 days after the clinic leaves (RET-01) |
+| MFA details, device and sign-in logs | Security (K-SEC-03; C07) | Legal duty; security | MFA while active; logs 1 year rolling (RET-07) |
+| Actions in the product, including which patient bookings they opened | Audit and patient access log (K-DP-02) | Legal duty; security | As the related record, at least 1 year (RET-06) |
+
+- **Staff never see clinical notes or prescriptions.** They see booking fields only (tier T1, front-desk scope).
+- **Who gives the notice:** the clinic tells its staff before adding them (Provider Agreement B1). We show this notice, with D-STAFF@1, when the staff member first activates their account.
+- **Invites that are not accepted** are deleted after 30 days.
+
+### 1b. People whose details a clinic gives us before they sign up (for example its doctors)
+
+- **What we keep:** name, mobile number and role, used only to send one invitation.
+- **Who gives the notice:** the clinic must tell them first (Provider Agreement B1).
+- **What the invitation says:** who gave us their details, and how to have them deleted.
+- **If they don't accept within 30 days,** we delete the details. Nothing is shown publicly until the doctor signs up and accepts D-PROFILE@1.
+
 ## 2. Who we share it with
 
 | Who | What | Why |
@@ -70,3 +89,4 @@ We tell you in the app before changes take effect, and ask again where new conse
 - `D-VERIFY@1`: "I agree that [Product Name] may check my registration with official registers and a verification partner, using the details and identity document I provide. ☐"
 - `D-PROFILE@1`: "I agree that my public profile (name, specialty, qualifications, registration number and council, languages, clinic, timings, fees and optional photo) is shown to patients. ☐"
 - `D-ANALYTICS@1` (optional): "Help improve [Product Name] with usage data linked to a random code. ☐"
+- `D-STAFF@1` (clinic staff, at account activation): "I agree that [Product Name] may use my name, phone number and role to run my staff account for [Clinic], and record what I do in the product for security and patient protection. ☐"

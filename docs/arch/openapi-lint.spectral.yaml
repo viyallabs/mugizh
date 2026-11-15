@@ -1,0 +1,177 @@
+# OpenAPI lint rules (S-038). Standards: docs/arch/api-standards.md
+# Run: spectral lint --ruleset docs/arch/openapi-lint.spectral.yaml <spec>.yaml
+# Spectral works with any backend language. Move this file next to the specs when the repo is set up (S-090/S-092),
+# and run it in CI with the OpenAPI diff check (K-ARC-06).
+# NOTE: written without a local Spectral run. NOT VERIFIED until CI lints the fixtures in docs/arch/lint-fixtures/:
+#   valid.core-api.v1.yaml must produce 0 errors; invalid.core-api.v1.yaml must produce exactly the errors listed in its header;
+#   scheduler-core.invalid.v1.yaml must fail no-health-fields-in-scheduler. Until then S-038 stays In Testing.
+
+extends:
+  - [spectral:oas, recommended]
+
+rules:
+  # §1 every operation has an operationId and a module tag
+  operation-operationId: error
+  operation-tags: error
+
+  # §2 versioned paths
+  paths-versioned:
+    description: Paths start with /v<n>/ or /admin/v<n>/ (K-ARC-06).
+    severity: error
+    given: $.paths
+    then:
+      field: "@key"
+      function: pattern
+      functionOptions:
+        match: "^/(admin/)?v[0-9]+/"
+
+  # §1 naming
+  paths-kebab-case:
+    description: Path segments are kebab-case; parameters are {camelCase}.
+    severity: error
+    given: $.paths
+    then:
+      field: "@key"
+      function: pattern
+      functionOptions:
+        match: "^(/([a-z0-9]+(-[a-z0-9]+)*|\\{[a-z][a-zA-Z0-9]*\\}))+$"
+
+  properties-camel-case:
+    description: JSON property names are camelCase.
+    severity: error
+    given: $.components.schemas..properties
+    then:
+      field: "@key"
+      function: casing
+      functionOptions:
+        type: camel
+
+  # §6 idempotency (K-PAY-02)
+  post-idempotency-key:
+    description: Every POST declares the Idempotency-Key header.
+    severity: error
+    given: $.paths[*].post
+    then:
+      - field: parameters
+        function: truthy
+      - field: parameters
+        function: schema
+        functionOptions:
+          schema:
+            type: array
+            contains:
+              type: object
+              required: [in, name]
+              properties:
+                in: { const: header }
+                name: { const: Idempotency-Key }
+
+  idempotency-key-required-for-money-and-messages:
+    description: Operations marked x-side-effect money or message make Idempotency-Key required.
+    severity: error
+    given: "$.paths[*][?(@ && (@['x-side-effect'] === 'money' || @['x-side-effect'] === 'message'))]"
+    then:
+      field: parameters
+      function: schema
+      functionOptions:
+        schema:
+          type: array
+          contains:
+            type: object
+            required: [in, name, required]
+            properties:
+              in: { const: header }
+              name: { const: Idempotency-Key }
+              required: { const: true }
+
+  # §4 one error format
+  error-responses-problem-json:
+    description: 4xx and 5xx responses use application/problem+json (RFC 9457).
+    severity: error
+    given: "$.paths[*][*].responses[?(@property.match(/^[45][0-9][0-9]$/))]"
+    then:
+      field: content
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          required: ["application/problem+json"]
+
+  # §8 authorisation declared on every operation (K-SEC-04)
+  roles-declared:
+    description: Every operation declares x-roles (deny by default).
+    severity: error
+    given: $.paths[*][get,put,post,patch,delete]
+    then:
+      field: x-roles
+      function: truthy
+
+  # §5 cursor pagination only
+  no-offset-pagination:
+    description: Use cursor pagination; no offset/page parameters.
+    severity: error
+    given: $.paths[*][*].parameters[*].name
+    then:
+      function: pattern
+      functionOptions:
+        notMatch: "^(offset|page|pageNumber|skip)$"
+
+  list-cursor-pagination:
+    description: GET operations returning an items[] list declare limit and cursor.
+    severity: error
+    given: "$.paths[*].get[?(@.responses && @.responses['200'] && @.responses['200'].content && @.responses['200'].content['application/json'] && @.responses['200'].content['application/json'].schema && @.responses['200'].content['application/json'].schema.properties && @.responses['200'].content['application/json'].schema.properties.items)]"
+    then:
+      field: parameters
+      function: schema
+      functionOptions:
+        schema:
+          type: array
+          allOf:
+            - contains: { type: object, required: [name], properties: { name: { const: limit } } }
+            - contains: { type: object, required: [name], properties: { name: { const: cursor } } }
+
+  # §3 personal data never in URLs (K-DP-04)
+  no-pii-in-query:
+    description: No personal or health data in query parameters; use POST .../search.
+    severity: error
+    given: "$.paths[*][*].parameters[?(@.in === 'query')].name"
+    then:
+      function: pattern
+      functionOptions:
+        notMatch: "/(phone|mobile|email|fullname|firstname|lastname|^name$|address|diagnos|aadhaar|dateofbirth|^dob$)/i"
+
+  # §3 money and time formats
+  money-is-integer:
+    description: amount is an integer in minor units.
+    severity: error
+    given: $..properties.amount
+    then:
+      field: type
+      function: enumeration
+      functionOptions:
+        values: [integer]
+
+  timestamps-date-time:
+    description: Properties ending in At are RFC 3339 date-time.
+    severity: error
+    given: "$..properties[?(@property.match(/At$/))]"
+    then:
+      field: format
+      function: enumeration
+      functionOptions:
+        values: [date-time]
+
+  # §10 scheduler-core holds no health data (K-ARC-02). Off by default; switched on for the scheduler spec below.
+  no-health-fields-in-scheduler:
+    description: scheduler-core strings are limited to IDs, refs, rrule, timeZone, enums and timestamps.
+    severity: off
+    # Selects string properties (no enum) whose NAME is not on the allow-list; any match is a violation.
+    # (Fixed 2026-11-15: the earlier version checked the keys inside each property schema, not the property name.)
+    given: "$..properties[?(@ && @.type === 'string' && !@.enum && !@property.match(/^(id|[a-z][a-zA-Z0-9]*Id|[a-z][a-zA-Z0-9]*Ref|rrule|timeZone|cursor|nextCursor|typeKey|[a-z][a-zA-Z0-9]*At)$/))]"
+    then:
+      function: falsy
+
+overrides:
+  - files: ["**/scheduler-core*.yaml"]
+    rules:
+      no-health-fields-in-scheduler: error

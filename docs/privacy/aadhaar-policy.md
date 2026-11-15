@@ -10,6 +10,8 @@
 
 **We never collect, store, log or display an Aadhaar number, VID or Aadhaar biometric, in any version, unless a later story adds an authorised flow that the lawyer has approved.**
 
+**The one thing we cannot fully prevent:** a patient may upload an image that shows an Aadhaar number despite the warning. **We cannot detect this automatically in v1.0**; OCR detection comes in v1.1. So the honest promise is: we never ask for it, and we never read it into data. When an upload is found to contain one, it is **quarantined at once and deleted** (AAD-05).
+
 ## 2. Why (legal basis) [VALIDATE all of section 2]
 
 The register's own source for C23 is "general knowledge, confirm with lawyer". I did not re-check these against primary text for this story.
@@ -29,7 +31,7 @@ The register's own source for C23 is "general knowledge, confirm with lawyer". I
 | AAD-02 | Free-text input that contains a valid Aadhaar number is **rejected** with a message asking the user to remove it. A valid number has 12 digits, the first digit 2–9, and a correct Verhoeff check digit. A 16-digit VID is handled the same way. | Booking notes, chat, clinical notes, support tickets, names, addresses | Shared validator in `packages/shared-types`; unit tests with valid, invalid and phone-number cases |
 | AAD-03 | Logs, traces, analytics events and error reports pass through a scrubber that replaces any valid Aadhaar number or VID with `[REDACTED-AADHAAR]`. | Logging, analytics, error reporting | Scrubbing test in S-095; planted number never reaches log storage |
 | AAD-04 | **Doctors' identity documents:** an Aadhaar card is **not accepted**. Accept PAN, passport, driving licence or voter ID, plus the council registration certificate. If a reviewer sees an Aadhaar card in an upload, they reject it and the file is deleted at once (not after 90 days). [CONFIRM, open decision 16] | Verification (S-110, S-258) | Upload screen lists accepted IDs; reviewer checklist (S-129 review queue); deletion audited |
-| AAD-05 | **Patients' uploaded documents:** before every upload, the app shows "Do not upload an Aadhaar card. If a document shows an Aadhaar number, cover it first." If an upload is later found to contain an Aadhaar number (patient report, support, doctor report or a later scan), it is deleted or replaced with a masked copy within 7 days and the event is logged. | Records upload (S-159), prescription photos (S-199) | Copy in i18n file; support runbook; from v1.1, the OCR adapter (S-205) also flags Aadhaar numbers |
+| AAD-05 | **Patients' uploaded documents:** before every upload, the app shows "Do not upload an Aadhaar card. If a document shows an Aadhaar number, cover it first." If an upload is found to contain an Aadhaar number (patient report, support, doctor report or a later scan): (1) **immediately**, on the report and without anyone opening the file again, it is **quarantined**: hidden from the record, from doctors and from sharing; no staff role can open it; excluded from search, exports and new backups. (2) The patient is told, and asked to upload a masked copy if they still need the document. (3) The quarantined file is **hard-deleted automatically within 24 hours** [CONFIRM]; only the deletion job can touch it. (4) The event (file reference, reporter, time, deletion time; **never the number**) is audit-logged. Existing backups age out under the backup policy and are covered by the patient's crypto-shredding key on erasure. | Records upload (S-159), prescription photos (S-199) | Copy in i18n file; support runbook; from v1.1, the OCR adapter (S-205) also flags Aadhaar numbers |
 | AAD-06 | A **masked Aadhaar** (only the last 4 digits visible, as UIDAI's masked e-Aadhaar shows) is allowed in an uploaded image where unavoidable. We never extract or store the last 4 digits as data. | Uploads | Reviewer checklist |
 | AAD-07 | We never ask for Aadhaar to sign up, book, consult, pay or verify. Phone OTP is the sign-in method. | Identity (S-104) | Design review; usability test |
 | AAD-08 | **ABHA (v2.0, S-229):** if a patient creates an ABHA using Aadhaar, that happens inside the NHA/ABDM flow. Our app passes the Aadhaar-based OTP request to ABDM and does not store, log or cache the Aadhaar number, even briefly in memory beyond the request. We store only the ABHA number and ABHA address. [VALIDATE against ABDM integration rules] | ABDM integration | Sandbox test; log scan; ABDM certification |
@@ -53,7 +55,7 @@ The register's own source for C23 is "general knowledge, confirm with lawyer". I
 | S-104 (phone sign-up) | No Aadhaar anywhere in sign-up (AAD-07). |
 | S-129 (verification review queue) | Reviewer checklist: reject Aadhaar cards and delete them at once (AAD-04, AAD-06). |
 | S-110, S-258 (doctor and nurse ID) | Accepted ID list without Aadhaar; immediate deletion if one is uploaded (AAD-04). |
-| S-159, S-199 (patient uploads) | Upload warning and the 7-day removal process (AAD-05). |
+| S-159, S-199 (patient uploads) | Upload warning; a "report Aadhaar" action for patients, doctors and support; immediate quarantine; deletion within 24 hours (AAD-05). |
 | S-205 (OCR, v1.1) | Flag Aadhaar numbers in extracted text (AAD-05). |
 | S-229 (ABHA, v2.0) | Pass-through only (AAD-08). |
 
@@ -69,5 +71,5 @@ The register's own source for C23 is "general knowledge, confirm with lawyer". I
 ## 6. Decisions needed
 
 1. **[Founder, open decision 16]** Doctors' ID: reject Aadhaar cards completely (recommended, AAD-04), or accept masked ones?
-2. **[Founder]** Is a 7-day removal target right for Aadhaar found in patient uploads (AAD-05)?
+2. **[Founder]** Immediate quarantine, then deletion within 24 hours, for Aadhaar found in patient uploads (AAD-05; was 7 days with the file still visible)?
 3. **[Lawyer]** Confirm section 2, and confirm that rejecting free text with an Aadhaar number (AAD-02) and pass-through ABHA creation (AAD-08) are enough.

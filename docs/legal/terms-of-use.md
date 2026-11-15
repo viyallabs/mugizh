@@ -25,7 +25,7 @@ These terms are an agreement between you and [Company legal name], [registered a
 
 - We run a platform that lists **doctors we have verified** (registration checked with State Medical Councils or the NMC), and lets you book and pay for appointments and online consultations with them.
 - **Doctors are independent.** Each doctor decides on your diagnosis and treatment and is responsible for it. We do not employ doctors to treat you, and we do not influence their clinical decisions.
-- **Search results are never paid for.** How results are ordered is explained in plain words on the search screen (distance, availability, specialty match, verification and, later, ratings). **[CD-05; E-Commerce Rules: explain the main ranking parameters]**
+- **Search results are never paid for.** How results are ordered is explained in plain words on the search screen (distance, availability, specialty match, verification, the doctor's reliability, such as joining online consultations on time, and, later, ratings). **[CD-05; E-Commerce Rules: explain the main ranking parameters. "Reliability" stays only if the founder approves it as a ranking factor (Provider Agreement A11); otherwise remove it here, in CD-05 and in A11.]**
 - We do not sell medicines in this version.
 - Reminders and other app features help you follow your doctor's instructions. They are not medical advice. **[Intended-use statements, S-022]**
 

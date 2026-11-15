@@ -33,7 +33,7 @@
 | A8 | **Security incidents** | Tell us **within 6 hours** if you suspect your account, device or patient data has been compromised (S-020). |
 | A9 | **Conduct and advertising** | You follow the IMC Regulations 2002 and the NMC advertising guidelines of 6 Oct 2026, including: no payment or gift linked to referrals or prescriptions (CD-01); no soliciting, buying or editing reviews (CD-08, CD-12); no testimonials and no endorsing our app or products (CD-09, CD-10); no "best", "top" or cure claims, and no unverifiable awards on your profile (CD-06). |
 | A10 | **Profile accuracy** | Specialty only with a recognised postgraduate qualification (RG-04). The fee shown in the app equals your clinic fee. Your calendar is kept accurate; leave and absences are marked in advance. |
-| A11 | **Attendance** | Join online consultations on time. If you don't join within 10 minutes, the patient is refunded automatically, and your reliability is recorded (E-BK-04). Reliability may affect visibility in search, as disclosed in our ranking factors. |
+| A11 | **Attendance** | Join online consultations on time. If you don't join within 10 minutes, the patient is refunded automatically, and your reliability is recorded (E-BK-04). Reliability may affect visibility in search. It is one of the published ranking factors (Terms of Use §2; CD-05), it is calculated only from recorded attendance, and you can see your own record and dispute errors. |
 | A12 | **Reviews (v1.1)** | You may post one public reply per review and report reviews that break the policy. No retaliation against reviewers. |
 | A13 | **Minors** | v1.0 is adults only. Do not consult a minor through the product until family profiles launch. |
 | A14 | **Complaints** | When a patient complains about you, respond to us **within 48 hours** so we can meet our 7-day resolution duty. Serious complaints trigger re-verification. |
@@ -42,7 +42,7 @@
 
 | # | Clause | Detail |
 |---|---|---|
-| B1 | **Clinic details** | Legal name, address, registration under the Clinical Establishments Act where your state requires it (C24), GSTIN if registered, and the doctors who practise with you. |
+| B1 | **Clinic details** | Legal name, address, registration under the Clinical Establishments Act where your state requires it (C24), GSTIN if registered, and the doctors who practise with you. Before you give us the details of a doctor or staff member, you tell them, and point them to our provider privacy notice (§1a, §1b). You remove staff from the product when they leave. |
 | B2 | **Seller of record** | The clinic is the seller of each appointment and is shown as such to patients (E-Commerce Rules 2020). **[VALIDATE]** |
 | B3 | **Payment account** | Keep an active merchant account with our supported payment aggregator. You authorise us, through the aggregator's partner access, to **create payment orders and issue refunds** on your account under the published Refund and Cancellation Policy (S-019). |
 | B4 | **Refund balance** | Keep enough balance for refunds. If a refund fails, we alert you. If it is not fixed within **48 hours**, new bookings are paused until it is [CONFIRM]. |

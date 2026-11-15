@@ -26,8 +26,13 @@ rules:
   - { id: RF05, trigger: technical_failure_recorded,    applies_to: online,    refund_pct: 100, auto: true,  alt: free_reschedule }
   - { id: RF06, trigger: converted_to_in_person,        applies_to: online,    refund_pct: 50,  auto: true,  alt: credit_to_in_person_visit }   # [CONFIRM]
   - { id: RF07, trigger: patient_cancelled, before_minutes_gte: 120, applies_to: any, refund_pct: 100, auto: true }
-  - { id: RF08, trigger: patient_cancelled, before_minutes_lt: 120,  applies_to: any, refund_pct: 0,   auto: false }
-  - { id: RF09, trigger: patient_no_show,               applies_to: any,       refund_pct: 0,   auto: false }
+  - { id: RF08, trigger: patient_cancelled, before_minutes_lt: 120,  applies_to: any, refund_pct: 0,   auto: false, blocked_by: FAIRNESS-01 }
+  - { id: RF09, trigger: patient_no_show,               applies_to: any,       refund_pct: 0,   auto: false, blocked_by: FAIRNESS-01 }
+
+# FAIRNESS-01 (blocks approval of this policy): RF08/RF09 are cancellation charges. E-Commerce Rules 2020 r.4(6) allow them
+# only if similar charges are borne on a unilateral clinic cancellation. RF03/RF04 only refund, so they do not meet that.
+# Founder picks: A) add compensation to RF03/RF04 when late (recommended), B) lower RF08/RF09 refund_pct loss + compensation,
+# C) RF08/RF09 refund_pct: 100. Lawyer confirms. See docs/legal/refund-policy.md "Fairness". status cannot become approved until resolved.
 
 refund_execution:
   start_within_minutes: 60

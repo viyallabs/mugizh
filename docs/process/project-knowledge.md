@@ -21,7 +21,8 @@ the phase that creates them is in brackets.
 | Contracts named in "Contract refs" (K-IDs) | `contracts/` **(not yet)**; until P08, use the Contracts sheet | P08 |
 | Edge cases named in "Edge case refs" (E-IDs) | Edge Cases sheet; later `docs/` export | P03 / P06 |
 | Compliance items (C-IDs) | Compliance sheet | P01 |
-| Architecture decisions (ADRs) | Architecture sheet; later `docs/adr/` | P05 |
+| Architecture decisions (ADRs) | Architecture sheet (column J: S-035 recommendation); `docs/arch/adr-decisions.md` | P05 |
+| Architecture overview, module boundaries, adapter interfaces, API standards | `docs/arch/` | S-034 to S-038 (P05) |
 | Designs for UI stories | Screens sheet / design files | P09 |
 
 ## Until contracts exist (P00 to P07)

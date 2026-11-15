@@ -32,13 +32,13 @@
 | CH-02 | **Guardian** means a parent or court-appointed lawful guardian aged 18+, who declares the relationship. Step-parents and other relatives need a court order or the parent's in-app delegation [CONFIRM]. | v1.1 | S-200 |
 | CH-03 | A child profile stays **locked** (no booking, no records, no reminders) until verifiable guardian consent is recorded (K-DP-10). | v1.1 | S-200 |
 | CH-04 | The child profile holds only name, date of birth, sex, relationship to the guardian, and clinical data from care. **No photo ID, no Aadhaar number** (AAD rules in [aadhaar-policy.md](aadhaar-policy.md)), no school details. | v1.1 | S-200 |
-| CH-05 | Guardian consent is per purpose, like adults' consent: P-CARE, P-RECORD and P-REMIND (needed), and P-SHARE per consult. P-ANALYTICS, P-NEWS and P-MEDNAMES are **not offered** for a child. Every consent record stores `on_behalf_of` (child) and `given_by` (guardian), plus the verification method. | v1.1 | S-057, S-200 |
+| CH-05 | Guardian consent is per purpose, like adults' consent, **with one checkbox per purpose**: P-CARE and P-RECORD (needed), P-REMIND (optional), and P-SHARE per consult. P-ANALYTICS, P-NEWS and P-MEDNAMES are **not offered** for a child. Every consent record stores `on_behalf_of` (child) and `given_by` (guardian), plus the verification method. | v1.1 | S-057, S-200 |
 | CH-06 | A second guardian can be invited. Each guardian can withdraw consent for themselves. If the guardians disagree, the more restrictive choice applies until they resolve it. We act on a court order when one is provided. We do not judge custody disputes. [CONFIRM] | v1.1 | S-200, support runbook |
 | CH-07 | **No tracking or targeting:** no analytics events, no A/B tests, no marketing, no recommendations and no third-party SDKs on child profile screens. Logs keep only what security needs. | v1.1 | S-200, S-095 |
 | CH-08 | Payer and patient are recorded separately. The guardian pays, and the child is the patient (E-FAM-01, S-211). | v1.1 | S-211 |
 | CH-09 | **Teleconsult with a child:** the guardian (or an adult the guardian named) must be present. The doctor confirms the adult's identity and relationship before starting. Prescribing checks P02 and P04 cover the child's name and age and the guardian's consent. | v1.1 | S-138, S-012 update |
 | CH-10 | **At 18** (S-212, E-DP-11): the guardian and child are told 30 days before. On the birthday, guardian access ends and the profile is frozen. The new adult can claim it with their own phone, OTP and fresh consent, and then can choose to grant the former guardian caregiver access (S-207). Unclaimed records follow RET-02 retention, then are deleted. | v1.1 | S-212 |
-| CH-11 | **Adolescent confidentiality (13–17):** sensitive categories such as sexual health and mental health raise a conflict between guardian access and the teenager's privacy. v1.1 default: the guardian sees everything, and the doctor can mark a note as "discuss in person" so it is not shown in the app [CONFIRM with doctor and lawyer]. | v1.1 | S-200, S-207 |
+| CH-11 | **Adolescent confidentiality (13–17):** sensitive categories such as sexual health and mental health raise a conflict between guardian access and the teenager's privacy. **Launch blocker: child profiles do not launch until a confidentiality and safeguarding protocol is approved by the doctor reviewer and the lawyer.** Keeping sensitive matters for an in-person talk does not stop them reaching the guardian through the digital record, so it is not a fix. The protocol must define: (1) which record categories a guardian can and cannot see, and at which ages; (2) how sensitive disclosures are recorded and who can access them; (3) emergencies, when a guardian must be told; (4) mandatory reporting duties (for example POCSO); (5) what the teenager is told about who can see their record. **No hide/show toggle is built before that.** [VALIDATE doctor + lawyer; doctor review pack Q10] | v1.1 (gate) | S-200, S-207 |
 | CH-12 | If we find an under-18 user holding an adult account (wrong date of birth), we close the account. We delete its data except clinical records that the law makes us keep (RET-02), and tell the user. | v1.0 | Support runbook, privacy notice §2 |
 | CH-13 | Adults who lack capacity, with a lawful guardian under DPDP rule 11, are **out of scope until a later version**. In v1.x, an adult's caregiver access always comes from the adult's own consent (S-207) or the nominee process. | v1.x | — |
 
@@ -56,8 +56,11 @@ The relationship (parent or guardian) is a **declaration** in every option, kept
 
 > **Add a child to your account**
 > You are adding [child's name], born [date], as your [son / daughter / ward].
-> ☐ I am this child's parent or lawful guardian, and I am 18 or older.
-> ☐ I allow [Product Name] to keep [child's name]'s health record and use it to book care, run consultations and send reminders to me.
+> ☐ I am this child's parent or lawful guardian, and I am 18 or older. *(declaration, not a consent)*
+> ☐ **Bookings and consultations (P-CARE, needed):** I allow [Product Name] to use [child's name]'s booking details, and the health information added in consultations, to book and run their care.
+> ☐ **Medical record (P-RECORD, needed):** I allow [Product Name] to store [child's name]'s consultation notes, prescriptions and the documents I upload.
+> ☐ **Reminders (P-REMIND, optional):** Send me reminders from [child's name]'s prescriptions.
+> *(Sharing history with a doctor is asked at each consultation, P-SHARE. Each choice is stored with `on_behalf_of` and `given_by`, CH-05.)*
 > You can stop this at any time in **Settings → Family**. We never use a child's information for advertising or tracking. When [child's name] turns 18, your access ends and they can take over their record.
 > [Verify that you are an adult] → (option chosen in section 4)
 

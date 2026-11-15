@@ -1,0 +1,40 @@
+# Lint fixture (S-038): must FAIL no-health-fields-in-scheduler on "medicineName" and "notes" (K-ARC-02).
+# Allowed strings (activityId, externalRef, rrule, timeZone, startAt, typeKey) must NOT be flagged.
+openapi: 3.1.0
+info:
+  title: scheduler-core invalid fixture
+  version: 1.0.0
+  description: Health data leaking into scheduler-core.
+  contact: { name: Platform team }
+servers:
+  - url: https://scheduler.example.test
+tags:
+  - name: scheduler
+paths:
+  /v1/activities:
+    post:
+      operationId: createActivity
+      description: Create an activity.
+      tags: [scheduler]
+      x-roles: [service]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Activity' }
+      responses:
+        '201': { description: created }
+components:
+  schemas:
+    Activity:
+      type: object
+      properties:
+        activityId: { type: string }
+        externalRef: { type: string }
+        rrule: { type: string }
+        timeZone: { type: string }
+        startAt: { type: string, format: date-time }
+        typeKey: { type: string }
+        medicineName: { type: string }
+        notes: { type: string }

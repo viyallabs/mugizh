@@ -14,9 +14,13 @@
 
 - **What we collect:** your phone number, name, date of birth, and the health information you or your doctor add (consultation notes, prescriptions, reports).
 - **Why:** to book your appointments, run your consultations, keep your medical record, and send your reminders.
-- **Who sees your health record:** you, and a doctor only when you allow it, for a set time. You can take that permission back at any time.
+- **Who sees your health record:**
+  - **You,** always.
+  - **The doctor you book,** for that consultation. They see your booking and what is added in the consultation.
+  - **Each doctor keeps the notes from their own consultations** with you, as the law requires.
+  - **Any other doctor sees the rest of your record only when you share it,** for a set time. You can take that permission back at any time.
 - **Where it is kept:** your health information is stored in India.
-- **Your choices:** you agree to each use separately. Reminders on WhatsApp, medicine names in messages, product improvement and news are your choice. You can change them at any time in **Settings → Privacy**.
+- **Your choices:** you agree to each use separately. Prescription reminders, reminders on WhatsApp, medicine names in messages, product improvement and news are your choice. You can change them at any time in **Settings → Privacy**.
 - **Your rights:** see, correct or delete your data, name someone to act for you, and complain to us. If we do not fix it, you can complain to the Data Protection Board of India.
 - **Age:** you must be 18 or older to use the app.
 - **Contact:** our Grievance Officer, [name], [email], [phone].
@@ -66,7 +70,7 @@ We use each item only for the purposes listed next to it. Purpose IDs (P-…) li
 
 | Who | What they get | Why |
 |---|---|---|
-| The doctor and clinic you book | Booking details; your history only while your P-SHARE permission is active | To give you care |
+| The doctor and clinic you book | Booking details and what is added in your consultation (T1). The notes from their own consultations with you (T2). The rest of your history only while your P-SHARE permission is active (T3). | To give you care, and to keep the records the law requires |
 | Payment company (licensed by RBI) [FILL after S-040] | Amount, booking reference, your phone number | To take payment and refund |
 | SMS provider [FILL after S-041] | Phone number, sign-in code or discreet reminder text | Sign-in codes and SMS reminders |
 | WhatsApp (Meta Platforms) through [FILL provider, S-041], only if you opt in **[ON HOLD: remove this row if WhatsApp is not live at publication]** | Phone number and discreet reminder text | WhatsApp reminders |
@@ -113,7 +117,7 @@ Full details are in the data inventory and retention schedule (docs/data-invento
 ## 9. How we protect it
 
 - Encryption in transit and at rest; extra encryption for health information.
-- Doctors see your history only with your permission; every look is recorded, and you can see the log.
+- Apart from the doctor you are seeing, and each doctor's own notes about you, doctors see your history only with your permission. Every look is recorded, and you can see the log.
 - Our staff can open records only for a stated reason, for a short time, and every access is recorded.
 - Reminders on your lock screen never show a condition; medicine names appear only if you choose (P-MEDNAMES).
 - If a personal data breach affects you, we will tell you and the Data Protection Board of India, as the law requires. **[C03, K-DP-03, K-DP-09, K-SEC-08]**

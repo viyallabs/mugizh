@@ -98,7 +98,7 @@ Contract IDs (K-…) come from the Contracts sheet.
 | R-80 | Patient | Have notes, prescriptions and reports created on the platform stored in my record. | Automatic; encrypted. | M |
 | R-81 | Patient | Upload older documents. | Image/PDF upload; virus scan; stored encrypted. | M |
 | R-82 | Patient | Grant a doctor time-limited consent to my history for a consultation, and revoke it. | Consent check < 20 ms; revocation effective immediately (K-DP-02). | M |
-| R-83 | Patient | See who accessed my record. | Access log visible; every read is audited (async, tamper-evident). | M |
+| R-83 | Patient | See who accessed my record. | Access log visible; every read is audited (written durably before data is returned; tamper-evident hash chain built afterwards). | M |
 | R-84 | Doctor | View a patient's history only with active consent. | Without consent: no access; each view is audit-logged. | M |
 
 ### 2.9 Payments (F6-a)
@@ -140,7 +140,7 @@ Contract IDs (K-…) come from the Contracts sheet.
 - Role-based access per the Roles sheet; internal staff access is time-limited, reason-coded and audit-logged (JIT, K-SEC-08).
 - No Aadhaar storage or logging (K-DP-05); no card data (K-PAY-01).
 - SAST, secret and dependency scans pass in CI; independent VAPT before real patient data (P12).
-- Async append-only audit log with hash chaining (tamper evidence).
+- Append-only audit log: events written durably with the change (transactional outbox), then hash-chained asynchronously (tamper evidence). No audit record is lost if a process crashes (ADR-28).
 
 ### 3.4 Privacy and compliance (DPDP Act 2023 + DPDP Rules 2025)
 - Health data stored and processed only in India-region infrastructure and India-resident vendors (K-DP-01).

@@ -63,7 +63,15 @@ The same details are on the confirmation and the receipt. **No pre-ticked add-on
 **Rules for the policy itself:**
 - A clinic can set a **more generous** policy, never a stricter one, in v1.0.
 - The policy version is stored with each booking, and the policy applied always equals the policy shown (S-133).
-- **Fairness check [VALIDATE]:** the E-Commerce Rules bar cancellation charges on consumers unless the e-commerce entity bears similar charges when it cancels. Our late-cancellation "no refund" is matched by a full refund plus a free reschedule when the doctor cancels. The lawyer must confirm this is enough.
+- **Fairness check: NOT met as drafted. Must be resolved before the policy is approved.**
+  - **The rule:** the E-Commerce Rules 2020 (rule 4(6)) allow a cancellation charge on consumers only if the e-commerce entity "also bears similar charges" when it cancels unilaterally.
+  - **The gap:** the "no refund" on a late cancellation is a cancellation charge. A full refund, or a free reschedule, when the clinic cancels only returns the patient's own money; it is not a charge borne. So it does **not by itself** satisfy the rule.
+  - **Options** (detail in [legal/refund-policy.md](../legal/refund-policy.md), "Fairness"):
+    - **A. Recommended:** matching compensation to the patient on a late clinic cancellation or doctor no-show, funded by the clinic.
+    - **B:** a lower patient charge, plus matching compensation.
+    - **C:** no cancellation charge.
+  - **Decide:** founder **[CONFIRM]**. Lawyer **[VALIDATE]**, including whether the rule binds us, the clinic as seller, or both.
+  - **Until then,** RF rules for late cancellation and no-show in the YAML stay draft and must not ship.
 - **Timing:** refunds start within 1 hour of the trigger and go back to the original payment method. The patient sees the status and a reference number. For failed transactions, the aggregator's RBI turnaround rules apply: automatic reversal, with compensation if late [VALIDATE].
 - **Mode B refund duty:** the clinic, as seller, owes the refund. The clinic agreement authorises us to issue policy refunds from its account through the API. If a refund fails (low balance), we alert the clinic, escalate to grievance, and pause new bookings for that clinic after 48 hours [CONFIRM]. The lawyer decides who the consumer can claim against (C19 note).
 
@@ -71,11 +79,11 @@ The same details are on the confirmation and the receipt. **No pre-ticked add-on
 
 | # | Question | Draft assumption |
 |---|---|---|
-| T1 | GST on consultations | Exempt. Healthcare services by a clinical establishment or an authorised medical practitioner, including teleconsultation, are exempt (notification 12/2017, entry 74). The clinic issues a bill of supply, not a tax invoice. |
+| T1 | GST on consultations | Exempt. Healthcare services by a clinical establishment or an authorised medical practitioner, including teleconsultation, are exempt (notification 12/2017, entry 74). **The patient document depends on the clinic's GST status:** a **registered** clinic issues a **bill of supply** (not a tax invoice). An **unregistered** clinic issues an ordinary receipt or commercial invoice, with no GST wording and no GSTIN, and must not issue a bill of supply. Many clinics will be unregistered, because a person supplying only exempt services is generally not required to register. |
 | T2 | GST on our subscription to clinics | Taxable at 18%. We issue a GST tax invoice (S-134). Clinics making exempt supplies cannot claim input tax credit, so the price should be quoted including GST. |
 | T3 | **TDS for e-commerce operators** (old s.194-O, now s.393(1) of the Income-tax Act 2025, reportedly 0.1%) | **Open.** Under the old s.194-O, payments made directly by the buyer to the seller were *deemed* to be credited by the operator. So TDS may apply even in mode B, even though no money passes through us. There is an exemption for individual sellers under ₹5 lakh a year with PAN. **This changes the C34 row ("conditional on split").** |
 | T4 | GST registration | Do we have to register from day one as an e-commerce operator, or only above the ₹20 lakh services threshold? Does GST tax collected at source (s.52) apply when the underlying supplies are exempt? Assumed: register voluntarily before the first subscription invoice (links to S-007). |
-| T5 | Receipts in mode B | We generate the patient's receipt **in the clinic's name** (with the clinic's GSTIN if it has one) on its behalf. Confirm the format and numbering. |
+| T5 | Receipts in mode B | We generate the patient's document **in the clinic's name**, on its behalf, using the clinic's GST status recorded at onboarding: **registered → bill of supply** (clinic GSTIN, its own number series per financial year); **unregistered → receipt** (no GSTIN, no GST wording, its own number series). Confirm both formats, the numbering, and whether generating them on the clinic's behalf needs a written authorisation in the Provider Agreement. |
 | T6 | Record keeping | Invoices and payment records kept 8 years (RET-04 in [data-inventory-v1.0.md](../data-inventory-v1.0.md)). |
 | T7 | Mode A later (v1.2) | Payout TDS, GST on our commission, and TCS. To answer before S-217. |
 
@@ -91,6 +99,7 @@ Tax rates and rules go into CA-signed configuration, never into code (S-008 note
 | Booking confirmed only on a signature-verified webhook, or polling; a pending booking times out after 15 minutes and auto-refunds a late debit | K-PAY-02, E-PAY-01, E-PAY-02 | S-125 |
 | Ledger records payments, refunds and subscription invoices in double entry, **even though the money is not ours** (memo entries for clinic-collected money) | K-PAY-04 | S-132 |
 | Refund rules only from the versioned policy file; version stored with each booking | K-PAY-05 | S-133, S-144 |
+| Patient document type follows `clinic.gst_status`: `registered` → bill of supply with GSTIN; `unregistered` → plain receipt with no GST fields. A change in status applies only to new bookings. Tests cover both. | T1, T5 | S-134 |
 | Daily reconciliation per clinic account | C17 | S-146 |
 
 ## 7. Acceptance criteria check
@@ -111,3 +120,4 @@ Tax rates and rules go into CA-signed configuration, never into code (S-008 note
 2. **Revenue in v1.0:** flat monthly subscription per clinic, free during the beta. No per-booking fee and no patient fee. And the price?
 3. **In-person visits:** prepay in the app, or allow pay-at-clinic per clinic?
 4. **Refund values** in section 4: the 2-hour window, 10-minute grace, 7-day conversion credit, and 48-hour pause.
+5. **Cancellation symmetry (blocks approval of the policy):** option A, B or C (section 4, "Fairness check").

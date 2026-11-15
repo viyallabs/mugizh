@@ -32,4 +32,22 @@ Some clinics offer more generous terms. If so, the app shows them before you pay
 
 ## Fairness
 
-If the clinic or doctor cancels, you always get a full refund or a free new time, which matches what we ask of you when you cancel late. **[E-Commerce Rules 2020: cancellation charges only if the platform bears similar charges when it cancels; VALIDATE]**
+If the clinic or doctor cancels, you always get a full refund or a free new time.
+
+> **Drafting note (remove before publishing).** This draft does **not yet** meet the E-Commerce Rules 2020 test as written.
+>
+> **The rule** (rule 4(6)): an e-commerce entity may impose a cancellation charge on a consumer only if it "also bears similar charges" when it cancels unilaterally. A refund only returns the patient's own money; it is not a charge borne. So keeping 100% of the fee on a late cancellation or no-show (row 2), while a late clinic cancellation or doctor no-show costs the clinic nothing beyond the refund, is probably **not symmetric**.
+>
+> **Options [CONFIRM founder; VALIDATE lawyer]:**
+>
+> - **A. Matching compensation (recommended):** if the clinic cancels less than 2 hours before, or the doctor doesn't join, the patient gets the full refund **plus** compensation equal to the late-cancellation charge. In mode B the clinic funds it, under the Provider Agreement.
+> - **B. Lower patient charge:** late cancellation or no-show keeps a smaller share (for example 50%). Late clinic cancellations add matching compensation.
+> - **C. No cancellation charge:** always refund in full. Simplest to comply with, but gives no protection against no-shows.
+>
+> **For the lawyer:**
+>
+> - whether rule 4(6) applies to the platform, the clinic (seller of record in mode B), or both;
+> - whether 100% forfeiture is reasonable under consumer law;
+> - whether the 50% outcome in row "The doctor says you need to be seen in person" is fair, since the doctor makes that call.
+>
+> Whatever is chosen changes RF rules in [refund-policy.v1.draft.yaml](../payments/refund-policy.v1.draft.yaml) and clause B4 of the [Provider Agreement](provider-agreement.md).

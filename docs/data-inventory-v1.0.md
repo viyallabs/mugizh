@@ -74,6 +74,8 @@ Each field below points to one of these rules.
 | Session tokens | All users | T | P-ACCOUNT | C | RET-12 | DEL-TTL |
 | OTP codes and attempt counts | All users | T | P-ACCOUNT (rate limiting) | C | RET-12 | DEL-TTL |
 | MFA factor | Doctor, clinic admin, staff | T | D-PROFILE (K-SEC-03) | D | RET-01 | DEL-ERASE |
+| Clinic staff account: name, mobile, work email (optional), role, clinic | Clinic staff | P | D-STAFF (staff account, role-limited access) | C (D-STAFF@1) | RET-01; deleted when removed by the clinic, or 30 days after the clinic leaves | DEL-ERASE |
+| Pending invitation: name, mobile, role, inviting clinic | Invited doctor or staff (third party) | P | Send one invitation | D (clinic confirms it told them, Provider Agreement B1) | Deleted 30 days after sending if not accepted | DEL-TTL |
 | Age-gate rejection count | none (count only) | T | Reporting | n/a | RET-16 | n/a |
 
 ### 4.2 records (consent, sharing, uploads, access log, rights)
