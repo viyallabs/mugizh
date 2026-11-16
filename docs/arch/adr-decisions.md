@@ -1,7 +1,7 @@
 # Architecture decision records: recommendations (S-035)
 
 **Phase P05 · Epic EP07 · Depends on:** S-034 ([architecture-overview.md](architecture-overview.md)) · **Contract refs:** K-ARC-* · **Date:** 2026-11-15
-**Status:** In Testing. Every ADR has a recommendation with reasoning. **The founder decides each one** (Accept, Change or Reject, K-DOD-03). The tech stack ADRs are deliberately left open (section 3).
+**Status:** In Testing. Every ADR has a recommendation with reasoning. **The founder decides each one** (Accept, Change or Reject, K-DOD-03). The tech stack ADRs were left open (section 3); **the founder decided the core stack on 2026-11-16 (Go, React Native, Next.js, PostgreSQL + PostGIS, OCI for dev, AWS for staging and production): see section 6.**
 
 **Who this is for:** the founder, to decide each ADR; and the team, to know what is settled.
 
@@ -110,3 +110,92 @@ Keep the sheet's proposal: **TypeScript end to end, NestJS, React Native (Expo),
 | ADR-10 CI: GitLab CI or GitHub Actions | ☐ GitLab CI ☐ GitHub Actions |
 | Section 4: ADR-27, 28, 29 | ☐ Agree ☐ Change: |
 | Name / date | |
+
+---
+
+## 6. Founder decisions on the tech stack (2026-11-16)
+
+**Status:** recorded from the founder's message and answers. The **Architecture sheet still shows "Proposed"** for every ADR; update it when you confirm this section (Accepted or Changed, with "Decided on").
+**Not yet in `CLAUDE.md` §4**, which still says the stack is undecided (proposed wording in §6.5; Claude does not edit it without your approval).
+
+### 6.1 What was decided
+
+| ADR | Area | Decision | Compared with the sheet |
+|---|---|---|---|
+| ADR-02 | Language | **Go** for the backend (core API, workers, scheduler-core). **TypeScript** for the clients (React Native, Next.js), which follows from the choices below. | **Changed** (was TypeScript end to end) |
+| ADR-04 | Mobile | **React Native**; two apps (Patient, Pro). Expo or bare React Native: not stated. **[CONFIRM: Expo proposed]** | Accepted |
+| ADR-05 | Web | **React with Next.js** (Pro web, admin console, public pages) | Accepted |
+| ADR-06 | Database | **PostgreSQL + PostGIS**, one schema per module | Accepted |
+| ADR-09 | Cloud | **Two clouds:** **Oracle Cloud Infrastructure (OCI) for development**; **AWS for staging, production and DR** (India regions: Mumbai `ap-south-1`, Hyderabad `ap-south-2` **[VALIDATE]**) | **Changed** (was one cloud for all) |
+
+**Reading I made, please confirm:** you answered "Both OCI and Oracle Database" for Oracle, but chose PostgreSQL + PostGIS for the application database. I recorded **OCI as the dev cloud and PostgreSQL as the only application database. Oracle Database is not used by the application.** If you intended Oracle Database for something else (for example an existing licence or a reporting system), tell me, because it would be a new ADR and a new vendor-register entry (K-DP-08).
+
+### 6.2 ADRs that these decisions re-open
+
+The sheet's proposals for these assumed TypeScript, so they need a new decision. **The defaults below are my proposals, not your decisions. [CONFIRM each]**
+
+| ADR | Area | Was | Proposed now | Why |
+|---|---|---|---|---|
+| ADR-03 | Backend framework | NestJS | Go standard library `net/http` with the `chi` router; **OpenAPI-first**: server stubs generated from the OpenAPI file (for example `oapi-codegen`); `pgx` + `sqlc` for typed SQL; `slog` for logs; OpenTelemetry | The OpenAPI file stays the source of truth (K-ARC-06). Typed SQL keeps per-module schema grants visible. Few dependencies suit a health product. |
+| ADR-07 | Jobs and queues | Redis + BullMQ (Node only) | **PostgreSQL-backed queue** (for example River) | The transactional outbox (ADR-28) needs a job saved in the **same transaction** as the state change; a Postgres queue does that natively and removes Redis. **S-068 (1M reminders per day) must prove it.** Fallback: a Redis-based Go queue (asynq) or AWS SQS. |
+| ADR-24 | Monorepo | Turborepo or Nx | **Plain monorepo:** one Go module (or `go.work`) plus a `pnpm` workspace for React Native and Next.js; a task runner such as `make` or Taskfile | Turborepo and Nx are JavaScript tools. Module walls use Go `internal/` packages plus an import-rule linter (K-ARC-01), and a rule banning vendor SDK imports outside `adapters/` (K-ARC-03). |
+| ADR-25 | Testing | Jest/Vitest + others | Go `testing` with **real PostgreSQL + PostGIS in containers** (testcontainers); `govulncheck`, `gosec`, Semgrep, Gitleaks, Trivy; Playwright (web); Maestro or Detox (mobile); k6; OWASP ZAP | Tests against a real database prove the grants and locks the booking design relies on. |
+| ADR-10 | CI/CD and IaC | Terraform + GitHub Actions | **GitLab CI** (repo is on GitLab) **[CONFIRM]**; **Terraform or OpenTofu** with two provider sets (OCI, AWS) | Short-lived cloud credentials from CI (OIDC), one per cloud (infrastructure §7). |
+| ADR-11 | Authentication | Managed identity in India, or Keycloak | **Still open.** Dev and prod are on different clouds, so a **self-hosted, portable** option (Keycloak) behaves the same in both; a cloud-managed service would differ per cloud. | Decide as a follow-up to S-055; needs phone OTP, device binding, MFA and step-up signing (K-SEC-03). |
+| New: ADR-30 | Client API types | none | **Generate TypeScript clients and types from the OpenAPI file** for React Native and Next.js; CI fails if generated code is out of date | Two languages must not drift apart. |
+| New: ADR-31 | Dual-cloud portability | none | The rules in §6.3 | Keeps what passes in OCI dev passing in AWS staging. |
+
+**Effects of Go and the Postgres queue on other designs**
+- **Consent cache (K-DP-02, under 20 ms).** The design assumed a short-lived cache invalidated on revocation; Redis is no longer in the stack. **Open for S-097:** an in-process cache with a very short TTL plus revocation events, or a managed Redis used only for this. Measure before choosing.
+- **ADR-12 encryption in Go.** Envelope keys with per-patient keys still apply; the key service is called through a `keys` interface (§6.3).
+- **Two languages.** The Go API and the TypeScript clients share only the OpenAPI contract and the generated types.
+
+### 6.3 Dev on OCI, staging and prod on AWS: rules that keep them equal
+
+The risk is something working in dev and failing in staging because the clouds differ.
+
+| Where they differ | Rule |
+|---|---|
+| Key management (OCI Vault vs AWS KMS) | App code calls a **`keys` interface**; one implementation per cloud, chosen by config. A local software-key provider may exist **only for local and dev**; the config loader refuses it in staging and production. |
+| Secrets | The app reads secrets from environment variables injected at deploy time. **No cloud secrets SDK in app code** (K-SEC-05). |
+| Object storage | Use the **S3-compatible API** on both; one client. |
+| Database | **Same PostgreSQL major version and extensions (PostGIS, pg_trgm)** in dev and staging. **[VALIDATE]** that OCI's managed PostgreSQL supports PostGIS; if not, run PostgreSQL in a container in dev. |
+| Queue | PostgreSQL-backed, so identical everywhere. |
+| Containers | The **same container images** run in dev, staging and prod; keep orchestration manifests simple, because the OCI and AWS orchestrators differ. |
+| CI deployment identity | Short-lived workload identity per cloud (no long-lived keys). |
+| IaC | Two provider module sets. **Keep dev small;** staging and prod share one set of modules (same cloud). |
+| App code | **No cloud-specific managed service in app code.** Cloud features go behind an adapter (K-ARC-03). |
+| **Staging** | **Staging is the production rehearsal.** The VAPT, load tests and the Definition of Done "deployed to staging" (K-DOD-01) run on AWS. A story is not Done because it works in dev. |
+
+**Residency.** Real personal data exists only in AWS production and DR, in India regions. **Dev (OCI) and staging hold synthetic data only** (CLAUDE.md §5.3). The residency checks R1 to R7 (infrastructure doc §4) apply to production, DR and staging on AWS; OCI dev should still use an India region for consistency **[VALIDATE region names]**.
+
+**Cost to accept:** two clouds mean two sets of accounts, IAM, networking and billing for a small team. If the reason for OCI is credits or cost, that may be worth it. If not, **running dev on AWS too would remove the whole table above.** That is your call.
+
+### 6.4 What to update
+
+| Item | Change | Status |
+|---|---|---|
+| Architecture sheet, ADR rows | Set status and "Decided on"; update ADR-02, 03, 07, 09, 24, 25; add ADR-30, 31 | **You** (I do not edit the workbook: it was last saved by LibreOffice and a script could damage it) |
+| [architecture-overview.md](architecture-overview.md) | Queue label "Redis + BullMQ" → PostgreSQL-backed | Done |
+| [infrastructure-and-environments.md](infrastructure-and-environments.md) | Dev on OCI, rest on AWS | Done (§9 added) |
+| S-090 (monorepo) | Story text lists "apps and packages"; define the Go + pnpm layout | Pending |
+| S-093 (IaC) | Two providers; dev minimal | Pending |
+| S-098 (encryption library) | `keys` interface with OCI, AWS and local providers | Pending |
+| S-091, S-101 (CI, test harness) | Go and React Native tooling | Pending |
+| S-068 (scheduler prototype) | Prove the PostgreSQL queue at 1M per day | Pending |
+| S-097 (consent) | Decide the consent cache | Pending |
+| `CLAUDE.md` §4 | See §6.5 | **Needs your approval** |
+
+### 6.5 Proposed replacement for the CLAUDE.md §4 stack row (not applied)
+
+> **Tech stack:** backend and scheduler-core in **Go**; mobile in **React Native** (two apps); web in **React/Next.js**; database **PostgreSQL + PostGIS**; **dev on Oracle Cloud (OCI); staging, production and DR on AWS India regions.** Defaults still to confirm: ADR-03, 07, 10, 11, 24, 25. **Do not choose a framework, queue, identity service or CI tool beyond what `docs/arch/adr-decisions.md` §6 records.** Source: founder, 2026-11-16.
+
+### 6.6 Still open
+
+1. Confirm the Oracle reading (OCI for dev; no Oracle Database in the app).
+2. Confirm the Go proposals in §6.2 (framework, queue, monorepo, tests, CI), or change them.
+3. Expo or bare React Native.
+4. ADR-11 identity service.
+5. Consent cache approach (decided in S-097 after measurement).
+6. Why OCI for dev (cost or credits?), and whether the two-cloud cost in §6.3 is acceptable.
+7. ADR-21 retention, scheduler-core option, ADR-27 to 29, and accepting the 15 stack-independent ADRs (§5 table, still pending).

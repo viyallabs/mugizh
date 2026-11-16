@@ -65,7 +65,7 @@ flowchart TB
     DB[("Core database<br/>one schema per module<br/>(proposed: PostgreSQL + PostGIS)")]
     SDB[("scheduler-core database<br/>references only")]
     AUD[("Audit store<br/>append-only, hash-chained")]
-    Q[["Job queue + cache<br/>(proposed: Redis + BullMQ)"]]
+    Q[["Job queue<br/>(proposed: PostgreSQL-backed, see adr-decisions section 6)"]]
     OBJ[("Object storage<br/>private, encrypted")]
     KMS["Key management<br/>envelope keys, per-patient keys"]
     SEC["Secrets manager"]

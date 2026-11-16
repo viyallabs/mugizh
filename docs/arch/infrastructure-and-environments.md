@@ -125,6 +125,17 @@ Confirm every item before production. Each needs evidence: a screenshot, the IaC
 
 ## 8. Decisions
 
-1. **[Founder]** Cloud provider (ADR-09). This design then becomes concrete IaC in S-093.
+1. **[Founder]** ~~Cloud provider (ADR-09).~~ **Decided 2026-11-16: dev on Oracle Cloud (OCI), staging, production and DR on AWS.** See section 9 and [adr-decisions.md](adr-decisions.md) §6.
 2. **[Founder]** Recovery objectives: 15-minute RPO and 4-hour RTO (ADR-27).
 3. **[Founder]** A monitoring tool with India-hosted storage, or self-hosted (R3).
+
+## 9. Update 2026-11-16: dev on Oracle Cloud (OCI), staging, production and DR on AWS
+
+The founder chose **OCI for development** and **AWS for staging, production and DR** (see [adr-decisions.md](adr-decisions.md) §6). What this changes in this document:
+
+- **Section 3** (service mapping): the **AWS column is now the one for staging, production and DR.** Azure and Google Cloud are not used. The Mumbai and Hyderabad regions are still to be re-checked [VALIDATE].
+- **Section 1** (environments): **Dev runs on OCI** with synthetic data only. Staging runs on AWS and is the production rehearsal. "Each environment in its own account" holds per cloud.
+- **Section 2** (topology): the **managed Redis / queue box is not needed** if the PostgreSQL-backed queue is accepted (ADR-07, to be proven by S-068). Whether a cache is still needed is decided in S-097.
+- **Section 4** (residency R1 to R7): applies to production, DR and staging on AWS. Dev holds no personal data.
+- **New rule set** for keeping the two clouds equal: [adr-decisions.md](adr-decisions.md) §6.3. The key points: a `keys` interface per cloud, no cloud secrets SDK in app code, S3-compatible storage, the same PostgreSQL version and extensions, the same container images, and no cloud-specific managed service in app code.
+- **OCI service names and India-region availability are not yet checked** (managed PostgreSQL with PostGIS, key vault, object storage, containers). Check them before S-093 [VALIDATE].
