@@ -15,7 +15,8 @@ The same complaint can fall under three rule sets. We use the strictest for ever
 | Resolve a complaint | **7 days** | IT Intermediary Rules as amended 10 Feb 2026, in force 20 Feb 2026 (7 days, was 15); E-Commerce Rules 2020 (one month); DPDP Rules (up to 90 days) |
 | Remove content reported as unlawful (for example a profile or review) | **36 hours**; intimate or morphed images **2 hours** | IT Rules amendment 2026 (was 72 h and 24 h) |
 | Act on a court order or government notice to remove content | **3 hours** | IT Rules amendment 2026 (was 36 h) |
-| Act on a data-rights request (access, correction, erasure, nominee) | **15 days**; erasure complete in all stores within **30 days** | DPDP Rules (up to 90 days); our own target |
+| Act on a data-rights request (access, correction, erasure, nominee) | **15 days.** For erasure: data hidden and processing stopped within 15 days; data under the legal-minimum hold (RET-18: 180 days for registration data; from May 2027, 1 year for processing records) stays locked, then is deleted | DPDP Rules (up to 90 days); Intermediary Rules 3(1)(h); DPDP Rules 8(3); our own target |
+| Give a copy of medical records | **72 hours** | IMC Regulations 2002, reg. 1.3.2 [VALIDATE] |
 | Withdraw an optional consent | **Immediately**, automatic | DPDP s.6(4): as easy as giving |
 | Stop sharing with a doctor | **Immediately**, automatic | K-DP-02, E-DP-01 |
 

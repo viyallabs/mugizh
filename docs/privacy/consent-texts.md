@@ -12,7 +12,11 @@
 3. **Store a consent record** for every grant and withdrawal with: user key, purpose ID, text version, notice version, action (grant/withdraw), time (UTC, NTP-synced), channel (app/web/WhatsApp/paper), and evidence reference (for paper or WhatsApp). This record is what K-DP-02 checks. It feeds the `consent_given` and `consent_withdrawn` events in docs/metrics-and-events.md.
 4. **Withdrawal must be as easy as giving:** every optional item has a toggle in Settings → Privacy, and withdrawal takes effect immediately.
 5. The full notice must be one tap away from every consent screen.
-6. Texts are in English for now (founder decision, 14 Nov 2026). Translations must be checked for meaning, not just translated word for word, and versioned separately.
+6. **The app screens are in English at launch** (founder decision, 14 Nov 2026). **But the privacy notices, these consent texts, the Terms and the grievance page must be available in English or any language in the Eighth Schedule to the Constitution, at the user's choice** (compliance review R-03):
+   - DPDP Act s.5(3) and s.6(3) (from 13 May 2027);
+   - Intermediary Rules 2021, rule 3(1)(a), as amended in 2022: "in the language of his choice" (now).
+
+   A "Read in another language" link sits next to every notice and consent. Translations must be checked for meaning, not just translated word for word, and versioned separately [VALIDATE: how many languages and in what form, before the public launch].
 
 ## A. v1.0 app: sign-up
 
@@ -80,6 +84,8 @@ Expiry warning, shown to the doctor 10 minutes before access ends: *Access to th
 
 > **Start your online consultation with Dr [Name]?**
 > This is a video consultation. It is not for emergencies. In an emergency, call **112**. The call is not recorded. Dr [Name] may ask you to confirm your name and age.
+> **Online consultations are only for patients who are in India.** ☐ I am in India now.
+> *(Added 2026-11-16, compliance review R-02; also asked at booking. The checkbox must be ticked to join. Text version TELE-CONSENT@2 [VALIDATE wording with the lawyer].)*
 > [Start consultation]
 
 Starting the call is recorded as the teleconsultation consent (time, booking ID), linked to `P-CARE@2`.

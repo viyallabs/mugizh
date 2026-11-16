@@ -24,7 +24,16 @@ Do this:
    identifiers in logs/analytics/errors (K-DP-04), Aadhaar stored (K-DP-05), a read of another
    person's record without a consent check (K-DP-02), card data (K-PAY-01), a dose guessed or
    inferred (K-CS-03), a diagnosis shown in a notification (K-DP-09), hard-coded country values
-   (K-GLB-01), secrets in code.
+   (K-GLB-01), secrets in code. Also check:
+   - every non-patient read goes through `records.authorize` and writes the audit event first;
+   - new personal-data fields have a data-inventory row **with a class** (K-DP-06);
+   - no vendor SDK outside `adapters/` (K-ARC-03);
+   - no health field reaches scheduler-core (K-ARC-02);
+   - no feature flag can switch off consent, the rules engine, the prescribing gate, audit or
+     encryption;
+   - money operations use durable operation keys (K-PAY-02);
+   - the TC tests from docs/test/edge-case-test-catalogue.md are present by ID.
+   Read the full rule text in `contracts/` (CLAUDE.md §1).
 5. Report findings ranked: Blocker / Should fix / Nit. For each: file:line, what is wrong,
    a concrete failing case, and the fix.
 6. End with a verdict: APPROVE, APPROVE WITH CHANGES, or REJECT, and say why.

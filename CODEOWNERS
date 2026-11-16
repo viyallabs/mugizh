@@ -1,0 +1,18 @@
+# CODEOWNERS (S-076). GitLab reads this file at the repository root.
+# Replace the placeholders with real GitLab usernames once named (founder, clinical reviewer).
+# "Code owner approval" must be turned on for protected branches in GitLab settings, or these lines have no effect.
+
+# Contracts change only through an ADR approved by the founder (K-DOD-03)
+/contracts/                         @FOUNDER_USERNAME
+/CLAUDE.md                          @FOUNDER_USERNAME
+
+# Clinical rules, drug classification and clinical wording need a registered doctor (K-CS-07)
+/docs/clinical/                     @CLINICAL_REVIEWER_USERNAME @FOUNDER_USERNAME
+/config/country-packs/*/rules/      @CLINICAL_REVIEWER_USERNAME
+/config/country-packs/*/drugs/      @CLINICAL_REVIEWER_USERNAME
+
+# Refund policy and legal texts
+/docs/payments/                     @FOUNDER_USERNAME
+/config/country-packs/*/payments/   @FOUNDER_USERNAME
+/docs/legal/                        @FOUNDER_USERNAME
+/docs/privacy/                      @FOUNDER_USERNAME

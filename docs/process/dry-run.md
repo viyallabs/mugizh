@@ -56,3 +56,16 @@ Verdict: **APPROVE WITH CHANGES**; changes applied.
 - **D-1:** Ask the lawyer (P01) whether coarse reminder type (`medication`/`test`/`appointment`)
   per pseudonymous user is acceptable analytics under DPDP, or whether it should be aggregate-only
   with no per-user storage.
+
+## Run 3: CLAUDE.md start-of-story check on S-104 (S-070, 2026-11-15)
+
+**Purpose:** prove that a story can be started by following `CLAUDE.md` §2. S-104 is the first v1.0 code story ("As a patient, I sign up and log in with a phone OTP"). It has Contract ref K-SEC-03 and Edge case ref E-DP-22.
+
+| CLAUDE.md step | Result on S-104 |
+|---|---|
+| 1. Read the row; check dependencies are Done | Row read. **Dependencies are not all Done.** Sprint 0 stories (S-090 repo, S-091 CI, S-097 consent service) are in Backlog, and **the tech stack is undecided** (CLAUDE.md §4). **Stop condition triggered**, which is correct: the story must not start yet. |
+| 2. Read contracts, edge cases, TC tests | K-SEC-03 (OTP + device binding), K-DP-05 (no Aadhaar), K-DP-04 (no OTP in logs), K-DP-06 (inventory rows for phone and device). E-DP-22 → TC-16; E-SEC-01 → TC-55; E-DP-26 → TC-20. |
+| 3. Rules and how they will be met; conflicts | OTP 6 digits, 5 minutes, 5 attempts (threat model TM-01). +91 only from the country pack, not code (K-GLB-01). Phone stored field-encrypted with a blind index (encryption design §5). **No conflict found.** |
+| 4. Tests first, one PR | Not run (blocked at step 1). |
+
+**Verdict:** CLAUDE.md gives enough to start a story correctly and to stop when it should. **Re-run on the first real code story** once the stack is chosen and Sprint 0 is Done; record the result here.

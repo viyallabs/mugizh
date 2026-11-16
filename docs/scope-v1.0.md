@@ -16,7 +16,7 @@
 | **F11-a WhatsApp removed from v1.0** while on hold | Founder, 14 Nov 2026 | S-167 → Won't (this version). S-156 and S-157: app, push and SMS only. S-102: DLT only. R-72 is out of v1.0. Comes back as soon as the hold is lifted. |
 | **Clinic-collected payments are the v1.0 default** | S-019 recommendation; split settlement needs ₹40 lakh turnover | S-163 Should → **Must**. S-134: receipts in the clinic's name; our GST invoice is for the clinic subscription, not the patient. Split settlement stays at v1.2 (S-217). |
 | **Adults only** | Founder decision 3 | No minors anywhere in v1.0 (S-017 CH-01). |
-| **English only at launch** | Founder decision, 14 Nov 2026 | S-100 keeps the translation set-up, but only English ships. |
+| **English app screens at launch** | Founder decision, 14 Nov 2026 | S-100 keeps the translation set-up; only English screens ship. **Legal texts are the exception** (compliance review R-03): the privacy notices, consent texts, Terms and grievance page must be offered in English or any Eighth Schedule language at the user's choice (DPDP s.5(3), s.6(3) from 13 May 2027; Intermediary Rules 3(1)(a) now) [VALIDATE scope with the lawyer]. |
 | **Nurse accounts not in v1.0** | Proposed in S-031 | S-105 and S-106 keep "nurse" in the role model but create no nurse accounts until v4.0. |
 | **New trust behaviours from patient reviews** | S-027 themes T01–T04, T07 | Added to existing stories (no new stories): consult cannot close without both sides connected (S-148, E-BK-08); day-before clinic reconfirmation (S-113, E-BK-07); one price (S-112, S-122); the patient always picks a named doctor (S-119). |
 | **New story S-275** (Provider Agreement and provider privacy notice) | Gap found in S-023 | Must, before S-110 and S-163 |
@@ -60,6 +60,8 @@ The beta is v1.0 **minus** the stories below. They are still Must for the **publ
 2. Doctor review (S-029, S-012) not done: S-138 cannot be finalised.
 3. Payment partner access (S-040) not available from any aggregator: clinic-collected mode needs a different design.
 4. Lawyer review (S-009) late: the privacy, terms and provider documents block the beta.
+5. **Electronic-signature method (N5) not decided:** rules check P09 fails closed, so **no prescription can be issued** until the lawyer decides the method and a signing provider is chosen and integrated. Decision needed before the beta build reaches prescribing (S-150) (compliance review R-11).
+6. **Translated legal texts** (notices, consent, terms, grievance page in Eighth Schedule languages on request) are needed before public launch, and by 13 May 2027 at the latest (review R-03).
 
 ## 6. Sign-off
 

@@ -96,6 +96,7 @@ A drug in no list (unclassified) matches no remote row, so it is blocked.
 | P07 | Dose, frequency and duration fields complete; never inferred | E-RX-02, K-CS-03 |
 | P08 | Doctor re-authenticated (step-up): proves **who** is signing | K-SEC-03 |
 | P09 | Prescription signed with the **approved electronic signature method**: authenticates the **document** | C12, N5 (IT Act 2000) |
+| P10 | For an online consult (video, audio, text): the patient declared being **in India** at booking and at pre-join | Guidelines scope: consultations outside India are excluded [VALIDATE] (review R-02) |
 
 **P08 is not a signature.** P09 signs a hash of the final prescription with the method the lawyer approves under N5. Examples: an electronic signature from a licensed eSign service provider, or a Class 3 digital signature certificate. The signed hash makes any later change detectable. **Until N5 is decided, P09 blocks signing in production** (fail closed). The provider sits behind an adapter (K-ARC-03).
 
@@ -110,6 +111,7 @@ A drug in no list (unclassified) matches no remote row, so it is blocked.
 
 - **Doctor shows** name, qualification, registration number and council at the start of the consult, on the profile and on the prescription (R-15).
 - **Patient identity:** no anonymous consults. The doctor confirms name and age; our OTP-verified phone counts as the contact detail. Never ask for an Aadhaar number (C23).
+- **Patients outside India:** the guidelines cover teleconsultations with patients in India and exclude consultations outside India's jurisdiction. **Online consults are offered only to patients who are in India**; they confirm it at booking and at pre-join, and the doctor sees the confirmation (P10). A patient abroad can still book an **in-person** visit for when they are in India. Prescribing to a patient abroad may also break that country's licensing law [VALIDATE].
 - **Minors:** not supported in v1.0 (founder decision 3). **This is a product decision, not a legal ban.** From v1.1 the guidelines need an accompanying adult whose identity is confirmed, and caregivers need proof of the relationship (S-200).
 - **Consent:** see P04. Explicit consent can be a tap in the app, a recorded statement or a text message, and is stored with the booking.
 - **Records** (doctor's duty; we store them under RET-02 in docs/data-inventory-v1.0.md: 3 years after the patient's last consult with that doctor, plus legal hold [VALIDATE]): consult log, call or video metadata (**no recording**), chat transcript if text, images and reports shared, the prescription and the consent record. Signed records are immutable; changes are new versions (K-CS-05).
@@ -132,7 +134,7 @@ A drug in no list (unclassified) matches no remote row, so it is blocked.
 - **Clinical:** chief complaints, relevant findings, diagnosis or provisional diagnosis, suggested investigations.
 - **Rx:** drug name (generic name), strength, form, dose, frequency, duration, route, instructions.
 - **Other:** special instructions or advice, follow-up date.
-- **Signature:** the doctor's electronic signature applied under P09 (method decided by the lawyer, row N5), with a verification reference printed on the PDF, and the line "Issued after a teleconsultation (mode: video/audio)" [CONFIRM].
+- **Signature:** the doctor's electronic signature applied under P09 (method decided by the lawyer, row N5), with a verification reference printed on the PDF (a random token of at least 128 bits, never sequential; review R-09), and the line "Issued after a teleconsultation (mode: video/audio)" [CONFIRM].
 
 ## 9. Test cases for S-138 (one or more per row)
 
@@ -168,6 +170,7 @@ A drug in no list (unclassified) matches no remote row, so it is blocked.
 | T28 | Signed prescription changed by one byte | Signature check fails; the change is detected |
 | T29 | Unclassified drug blocked on audio; doctor switches the consult to video | Still blocked, RX_NOT_CLASSIFIED (PL02) |
 | T30 | Drug master import with a drug that matches "prohibited" and is also in List A, without an amendment exception | Import rejected; no new classification version |
+| T31 | Video consult where the patient did not confirm being in India | Consult cannot start; signing blocked, RX_PATIENT_OUTSIDE_INDIA (P10) |
 
 ## 10. Acceptance criteria check
 
@@ -211,5 +214,6 @@ A drug in no list (unclassified) matches no remote row, so it is blocked.
 - The precedence rule and drug master import checks are added.
 - Patient address is added for validation.
 - Tests T27–T30 are added.
+- 2026-11-16 (compliance review R-02): online consults only for patients in India (P10, test T31, block message RX_PATIENT_OUTSIDE_INDIA).
 
 **Proposed new edge case (for the Edge Cases sheet):** E-RX-06, "Video consult falls back to audio before the prescription is signed": rules use the mode at signing, and List A first prescriptions are blocked, with a prompt to restore video.

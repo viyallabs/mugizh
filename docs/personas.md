@@ -20,7 +20,7 @@ with the patient's permission).
 | **Pains** | Paper prescriptions get lost or are hard to read. Forgets doses, refills and test dates. Has to chase labs and carry old reports. Not sure which clinic or doctor to trust. Privacy worry: does not want a reminder on the lock screen to reveal her condition. |
 | **Devices** | Mid-range Android smartphone, often shared or with limited storage; patchy mobile data. Uses WhatsApp daily. **[VALIDATE]** |
 | **Languages** | Tamil or the regional language first; some English. Reads WhatsApp messages; may prefer voice or large text. (Roadmap: en-IN at v1, hi-IN and ta-IN later; regional language support was not selected for v1.0, so confirm the launch language.) **[VALIDATE]** |
-| **Needs from product** | Automatic reminders on by default; discreet wording; WhatsApp channel; simple, large UI; works on weak data; consent she can see and revoke. |
+| **Needs from product** | Automatic reminders once she opts in (then on for every item); discreet wording; WhatsApp channel (on hold; SMS meanwhile); simple, large UI; works on weak data; consent she can see and revoke. |
 
 **Key journey: after a check-up**
 1. Books a follow-up slot with her verified doctor and pays in the app.

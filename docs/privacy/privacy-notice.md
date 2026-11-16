@@ -27,6 +27,8 @@
 
 ---
 
+**Read this notice in your language:** this notice and every consent request are available in English and in the languages listed in the Eighth Schedule to the Constitution. Choose "Read in another language". **[DPDP s.5(3), s.6(3); Intermediary Rules 3(1)(a); compliance review R-03; VALIDATE list and form]**
+
 ## 1. What this notice covers
 
 This notice explains what personal data we collect, why, who we share it with, how long we keep it and what rights you have. It covers the app, the website and our WhatsApp channel.
@@ -110,7 +112,7 @@ Use **Settings → Privacy → My data rights**, or write to the Grievance Offic
 | Records of your consent | While you have an account, and 3 years after. **[VALIDATE; RET-05]** |
 | Security logs | 1 year, in India. **[VALIDATE; C07, C03; RET-07]** |
 | Documents you upload | Until you delete them or close your account. |
-| Everything else | Until you close your account or withdraw consent, then deleted within 30 days. If you do not sign in for 3 years, we will warn you and then close your account **[CONFIRM]**. Backups are made unreadable by destroying the encryption key. |
+| Everything else | Until you close your account or withdraw consent. Then we stop using it and hide it at once, but the law makes us keep some of it locked for a minimum time: your sign-up details for **180 days** after you close your account, and, from 13 May 2027, records of our processing for **at least 1 year**. During that time no one at [Product Name] can open it except to answer a lawful order. After that it is deleted, and backups are made unreadable by destroying the encryption key. If you do not sign in for 3 years, we will warn you and then close your account **[CONFIRM]**. **[VALIDATE; RET-18]** |
 
 Full details are in the data inventory and retention schedule (docs/data-inventory-v1.0.md, S-011).
 

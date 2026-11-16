@@ -11,6 +11,7 @@
 | [review-policy.md](review-policy.md) | Review Policy, for v1.1 when reviews launch |
 | [grievance-redressal.md](grievance-redressal.md) | Grievance Officer details, timelines and escalation routes |
 | [provider-agreement.md](provider-agreement.md) | **S-275:** Provider Agreement for doctors (Part A), clinics (Part B) and both (Part C) |
+| [lawful-requests-procedure.md](lawful-requests-procedure.md) | Handling of government, police, court and regulator requests (added 2026-11-16, compliance review R-06) |
 
 ## Law change found in this story
 
@@ -34,3 +35,11 @@
 4. **[Engineering, S-142]** Show users an in-app reminder of the rules at least every 3 months; add takedown timers (36 h, 2 h, 3 h) to the grievance queue; propose a contract rule for these in P08 (S-008 suggested one for C08).
 5. **[Founder + Lawyer] Cancellation symmetry (refund-policy.md, "Fairness"):** the draft keeps 100% of the fee on late patient cancellations, but clinic cancellations cost the clinic only a refund. E-Commerce Rules rule 4(6) probably needs matching charges. Pick option A (matching compensation, recommended), B (lower charge) or C (no charge).
 6. **[Founder] Reliability as a ranking factor:** now listed consistently in the Terms (§2), CD-05 and Provider Agreement A11. If not approved, remove it from all three.
+7. **[Lawyer, priority, blocks the beta] N5 electronic signature:** which method makes the in-app prescription legally valid (eSign through a licensed provider, or a Class 3 certificate). Until it is decided, no prescription can be issued (rules check P09) (compliance review R-11).
+8. **[Lawyer] Added by the compliance review of 2026-11-16:**
+   - the legal-minimum hold (R-01: Intermediary Rules 3(1)(h) 180 days; DPDP Rules 8(3) 1 year);
+   - online consults only for patients in India (R-02);
+   - legal texts in Eighth Schedule languages (R-03);
+   - the information-security policy (R-04);
+   - the [lawful-request procedure](lawful-requests-procedure.md) (R-06);
+   - 72 hours for medical record copies (R-08).

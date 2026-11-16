@@ -6,7 +6,7 @@ the phase that creates them is in brackets.
 ## Always read
 | Item | Location | Created in |
 |---|---|---|
-| Rules for Claude (references contracts, DoD, process) | `CLAUDE.md` **(not yet)** | S-070 (P08) |
+| Rules for Claude (references contracts, DoD, process) | `CLAUDE.md` | S-070 (P08) |
 | Process and templates | `docs/process/` | S-006 (this story) |
 | Product vision | `docs/product-vision.md` | S-002 |
 | Personas | `docs/personas.md` | S-003 |
@@ -18,18 +18,19 @@ the phase that creates them is in brackets.
 ## Read per story (listed on the story)
 | Item | Location | Created in |
 |---|---|---|
-| Contracts named in "Contract refs" (K-IDs) | `contracts/` **(not yet)**; until P08, use the Contracts sheet | P08 |
+| Contracts named in "Contract refs" (K-IDs) | `contracts/` (DRAFT since 2026-11-15, word for word from the Contracts sheet; formal review in S-085) | S-071 to S-075 |
 | Edge cases named in "Edge case refs" (E-IDs) | Edge Cases sheet; later `docs/` export | P03 / P06 |
 | Compliance items (C-IDs) | Compliance sheet | P01 |
 | Architecture decisions (ADRs) | Architecture sheet (column J: S-035 recommendation); `docs/arch/adr-decisions.md` | P05 |
 | Architecture overview, module boundaries, adapter interfaces, API standards | `docs/arch/` | S-034 to S-038 (P05) |
 | Designs for UI stories | Screens sheet / design files | P09 |
 
-## Until contracts exist (P00 to P07)
-`/contracts` is created in P08. Until then Claude uses the **Contracts sheet** rows for the K-IDs
-on the story as if they were the contract files. They are read-only for Claude.
+## Contracts (since 2026-11-15)
+`/contracts` holds DRAFT contract files whose rule text matches the **Contracts sheet** word for
+word (S-071 to S-075). They bind Claude now, and they are read-only for Claude (K-DOD-03).
+The sheet stays the master list; formal approval comes in S-085.
 
 ## What Claude must not assume
-- No contract file or `CLAUDE.md` exists before P08/S-070. Say so rather than inventing one.
+- `CLAUDE.md` and the `/contracts` files exist (drafts). Never invent a rule that is not in them; ask instead.
 - Items marked "Lawyer check needed" in the Compliance sheet are not legal advice.
 - Architecture choices are proposals (status Proposed) until accepted in P05.

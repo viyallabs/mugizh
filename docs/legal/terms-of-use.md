@@ -50,6 +50,7 @@ You must be 18 or older and able to make a contract under Indian law. In this ve
 ## 6. Online consultations
 
 - Online consultations follow the Telemedicine Practice Guidelines 2020.
+- **Online consultations are only available while you are in India.** You confirm this when you book and before you join. If you are abroad, you can book a clinic visit for when you are back. **[Guidelines exclude consultations outside India; VALIDATE]**
 - **Consent:** by booking an online consultation, you agree to be consulted online. If a doctor or clinic starts the consultation, you will be asked to agree.
 - **Identity:** the doctor will confirm your name and age, and the doctor's name, qualifications and registration number are shown to you.
 - **Limits:** the doctor may decide that you need to be seen in person. Some medicines cannot be prescribed online, and some need a video consultation. The doctor may decline to prescribe them.
@@ -97,6 +98,10 @@ We remove content reported as unlawful **within 36 hours**, and content showing 
 ## 12. Suspending or closing accounts
 
 You can close your account at any time in **Settings → Privacy → My data rights**. We may suspend or close an account that breaks these terms or the law, and we will tell you why unless the law prevents it. What happens to your data is in the Privacy Notice.
+
+## 12a. Language
+
+These terms, our privacy notices and our grievance page are available in English and in the languages listed in the Eighth Schedule to the Constitution. Choose "Read in another language". If versions differ, [CONFIRM: which version prevails]. **[Intermediary Rules 3(1)(a) as amended 2022; DPDP s.5(3); review R-03; VALIDATE]**
 
 ## 13. Changes to these terms
 

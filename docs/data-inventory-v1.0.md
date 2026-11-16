@@ -3,7 +3,7 @@
 **Phase P01 · Epic EP02 · Depends on:** S-008 · **Compliance:** C01, C06, C30 (also C02, C03, C07, C20, C23, N1) · **Contract:** K-DP-06 · **Edge case:** E-DP-03
 **Date:** 2026-11-14 · **Not legal advice.** **[VALIDATE]** = legal point to confirm; **[CONFIRM]** = proposal for the founder.
 
-**Who this is for and what it decides:** for the founder, lawyer and CA, to approve how long each kind of data is kept and how it is deleted. For engineering it is the register K-DP-06 points to: **any PR that adds a personal-data field must add a row here** (purpose, basis, retention, deletion path). Sensitivity classes are proposals; S-044 confirms them.
+**Who this is for and what it decides:** for the founder, lawyer and CA, to approve how long each kind of data is kept and how it is deleted. For engineering it is the register K-DP-06 points to: **any PR that adds a personal-data field must add a row here** (purpose, basis, retention, deletion path). Sensitivity classes were confirmed in S-044 (section 4.0), with handling rules per class. **A new field also needs a class.**
 
 **Inputs:** requirements v1.0 (R-xx), privacy notice and purpose IDs (docs/privacy/), metrics and events, Architecture sheet (module map, ADRs), Contracts and Edge Cases sheets, S-008 review. **WhatsApp is on hold** (founder, 14 Nov 2026), so WhatsApp fields are listed but marked ON HOLD.
 
@@ -15,7 +15,7 @@ Each field below points to one of these rules.
 
 | Rule | Data | How long | Then | Why / source |
 |---|---|---|---|---|
-| **RET-01** | Account and profile data | While the account is active | Erased within 30 days of account closure (DEL-ERASE) | DPDP s.8(7): erase when the purpose ends. **Inactive accounts:** propose erasure after 3 years with no sign-in, with 48 hours' notice first [CONFIRM]. The DPDP Rules' 3-year inactivity rule is for very large platforms only and does not bind us [VALIDATE]. |
+| **RET-01** | Account and profile data | While the account is active | On closure: **restricted under the legal-minimum hold (RET-18)**, then erased (DEL-ERASE) | DPDP s.8(7): erase when the purpose ends. **Inactive accounts:** propose erasure after 3 years with no sign-in, with 48 hours' notice first [CONFIRM]. The DPDP Rules' 3-year inactivity rule is for very large platforms only and does not bind us [VALIDATE]. |
 | **RET-02** | Clinical records: notes, diagnoses, prescriptions, prescription PDFs, teleconsultation consent, consult outcome | **3 years after the patient's last consultation with that doctor**, longer while a complaint or legal claim is open (legal hold). While the account is active, the patient keeps their own copy for as long as they want. | On erasure: **restricted, not deleted** (DEL-RESTRICT), then hard-deleted when the period ends | See section 2. C30, E-DP-03. |
 | **RET-03** | Documents the patient uploads | Until the patient deletes them or closes the account | DEL-SELF / DEL-ERASE | No legal duty for us to keep the patient's own uploads. If a doctor copied content into their notes, that copy follows RET-02. |
 | **RET-04** | Financial: payments, refunds, ledger, invoices | **8 years from the end of the financial year** [VALIDATE with CA] | DEL-RESTRICT, then delete | GST (CGST Act s.36: 72 months from the annual-return due date) and income-tax book-keeping rules; 8 years covers both with margin [VALIDATE]. Invoices must not name a diagnosis or specialty that reveals a condition [CONFIRM]. |
@@ -31,6 +31,7 @@ Each field below points to one of these rules.
 | **RET-14** | v0 pilot data | **30 days after the pilot ends**, unless the patient joins the app and consents again | DEL-JOB | Promise in the v0 consent form. The doctor's paper prescription is the legal record, not our copy. |
 | **RET-15** | Nominee details | Account life; after a nominee request, 3 years after it closes | DEL-ERASE / DEL-JOB | C02, E-DP-10. |
 | **RET-16** | Under-18 sign-up attempts | Nothing kept except a daily count | none | Founder decision 3; C04. |
+| **RET-18** | **Legal-minimum hold** after erasure or account closure (added 2026-11-16, compliance review R-01) | **Registration data** (phone, name, date of birth, device, sign-up records): **180 days after the account is closed** (Intermediary Rules 2021, rule 3(1)(h); applies if we are an intermediary [VALIDATE]). **From 13 May 2027:** personal data, associated traffic data and processing logs **at least 1 year from the date of processing** (DPDP Rules 2025, rule 8(3), Seventh Schedule purposes) [VALIDATE]. Content we remove for breaking the rules: 180 days (rule 3(1)(g)). | **Restricted:** hidden from the app and from all staff roles; released only for a verified legal order (lawful-request procedure). Then hard-deleted. The patient key is destroyed only when the hold ends. | DPDP s.8(7) allows keeping data that the law requires. The longest applicable period wins. |
 | **RET-17** | Backups (encrypted, India) | **35 days rolling** [CONFIRM in P05] | Expire; erased users' data unreadable by key destruction | K-DP-07, E-DP-04. |
 
 ## 2. Why clinical records are kept for 3 years (acceptance criterion)
@@ -47,7 +48,7 @@ Each field below points to one of these rules.
 | Path | What happens | Built in |
 |---|---|---|
 | **DEL-SELF** | The user deletes the item; removed from every store, including object storage and the search index. | S-106 to S-108, records UI |
-| **DEL-ERASE** | Account-erasure job (K-DP-07): database, search index, caches, object storage, notification records, analytics `user_key` link, and deletion requests to each processor (DEL-VENDOR). Non-retained data in backups becomes unreadable by destroying keys. Ends with a report listing what was kept and why. | S-060 |
+| **DEL-ERASE** | Account-erasure job (K-DP-07). **Step 1, at once:** data hidden from the app, search index and caches cleared, processing stopped, analytics `user_key` link removed; data under the legal-minimum hold (RET-18) restricted. **Step 2, when the hold ends:** database rows, object storage and notification records deleted; deletion requests sent to each processor (DEL-VENDOR); patient key destroyed, so copies in backups become unreadable. Ends with a report listing what was kept, why and until when. | S-060 |
 | **DEL-RESTRICT** | Data under a legal duty is moved to a restricted state, invisible in the app, then hard-deleted on its date by a scheduled job. Legal holds pause the job. | S-060, S-062 |
 | **DEL-TTL** | Automatic expiry (cache or database time-to-live). | per module |
 | **DEL-ROLL** | Rolling retention window in log, analytics or message stores. | S-059, S-095 |
@@ -58,127 +59,171 @@ Each field below points to one of these rules.
 
 ## 4. Inventory
 
-**Class** (proposed; S-044 confirms): **S** = sensitive health · **P** = personal · **F** = financial · **T** = technical · **Pub** = public by design.
+### 4.0 Data classification (S-044, confirmed 2026-11-15)
+
+**Legal basis for the scheme:**
+- **DPDP Act 2023** protects all **personal data**: any data about an individual who can be identified from it, directly or with other data. It has no separate "sensitive" category, so every class below except Public and Internal is personal data, and **every breach of it must be notified** (DPDP Rules, rule 7).
+- **SPDI Rules 2011** (IT Act s.43A) still treat **health conditions and medical records** as sensitive personal data until the DPDP Act's repeal of s.43A takes effect (expected 13 May 2027) [VALIDATE; N1].
+- **K-DP-03** requires field-level encryption for clinical notes, diagnoses, prescriptions, documents and contact details.
+
+"Sensitive health" is our own higher-protection class, built on all three. **Pseudonymous data** (random keys, opaque references) is still personal data, because we hold the mapping.
+
+| Class | Code | What it means | Examples |
+|---|---|---|---|
+| **Public** | PUB | Published on purpose | Doctor public profile, clinic address, fees, timings |
+| **Internal** | INT | Business data about no individual | Rule files, drug master, config, aggregate counts, virus-scan verdicts |
+| **Personal** | PER | Identifies a person, but reveals no health information | Name, phone, date of birth, device ID, IP address, consent records, pseudonymous analytics key |
+| Personal, financial | PER-F | Personal data under tax and payment rules | Orders, refunds, receipts, GSTIN of a sole proprietor |
+| Personal, credential | PER-K | Secrets that let someone act as the user | OTPs, session and refresh tokens, MFA secrets, video join tokens |
+| **Sensitive health, link** | SH-L | Reveals that a person receives or seeks care, or from whom, without clinical content | Appointment (reveals the specialty), slot hold, consult join times, sharing grants, record access log, audit events |
+| **Sensitive health, content** | SH-C | Clinical content or free text that may contain it | Notes, diagnoses, prescriptions, prescription PDFs, uploads, reason for visit, grievance and support text, v0 pilot data |
+| **Prohibited** | — | Never collected or stored | Aadhaar number or VID (K-DP-05), card, UPI or bank credentials (K-PAY-01), biometrics, call recordings |
+
+**Handling rules by class.** These are the rules engineering builds to; S-056 to S-059 design the details.
+
+| Rule | PUB | INT | PER / PER-F | PER-K | SH-L | SH-C |
+|---|---|---|---|---|---|---|
+| Encrypted at rest (disk and database) | Yes | Yes | Yes | Yes | Yes | Yes |
+| Field-level encryption (K-DP-03) | No | No | **Contact details only** (phone, email), with a keyed hash (blind index) for sign-in lookup | Hashed (OTPs, tokens) or KMS-encrypted (MFA secrets) | Not required by K-DP-03; S-056 decides per field | **Required**, with the per-patient key; clinical records also under the retention key (§3) |
+| In logs, traces, crash reports | Allowed | Allowed | **No.** Only the pseudonymous user key and request IDs | **Never** | **Never** | **Never** |
+| In product analytics | Allowed | Allowed | Pseudonymous key only (P-ANALYTICS) | Never | Never | Never |
+| In notifications (lock screen, SMS) | Allowed | n/a | Own first name at most | Never, except the OTP in SMS-01 | **Never** (no doctor specialty in reminder text) | **Never**, except a medicine name with P-MEDNAMES |
+| In search index or caches | Allowed | Allowed | Not indexed; caches encrypted, short TTL | Never cached in plaintext | Not indexed; encrypted cache, short TTL | Never indexed; encrypted cache only |
+| Who can read | Anyone | Staff by role | The person, plus roles that need it | System only | Access tiers T1 to T4 and roles; **every non-patient read audited** (K-DP-02) | Same as SH-L, plus the K-DP-02 consent check |
+| Non-production (dev, staging, tests) | Synthetic | Allowed | **Synthetic only, never real data** | Synthetic | Synthetic only | Synthetic only |
+| Included in the patient's data export | n/a | No | Yes | **No** | Yes | Yes |
+| Erasure | Removed on leaving | n/a | DEL-ERASE (RET-01) | DEL-TTL | DEL-ERASE, or DEL-RESTRICT when tied to a clinical record | DEL-RESTRICT under RET-02, otherwise DEL-ERASE |
+| Breach notification (DPDP rule 7; CERT-In 6 h for reportable incidents) | No | Usually no | **Yes** | **Yes**, and rotate at once | **Yes** | **Yes** |
+
+**Mixed views take the highest class of anything shown.** For example, a payment row shown with the doctor's name is SH-L.
+
+**Notes from classification:**
+1. **Free text is SH-C by default.** Cancellation reasons should be a pick-list (then PER). Any optional free-text box is SH-C.
+2. **scheduler-core** holds only PER (pseudonymous) data. Its `typeKey` must stay a coarse category (for example `medication`, `appointment`), never a drug or condition. The subject mapping lives only in the core database.
+3. **Verification photos** are PER, not biometric data, **as long as no automated face matching is used.** Adding face matching would need a new review (DPDP and the provider notice).
+4. **SMS delivery logs** store the template ID and status, **never the variables**. A medicine name sent with SMS-10-N must not be logged.
+
+**Legend for the "Class" column below** (replaces the earlier draft letters; S = SH-C or SH-L, P = PER, F = PER-F, T = INT or PER-K, Pub = PUB).
 **Basis:** **C** = consent (purpose ID from docs/privacy/consent-texts.md) · **L** = legal obligation · **D** = doctor/clinic agreement (purposes D-VERIFY, D-PROFILE, D-PAY, proposed; doctor privacy notice still to be written, see section 6).
 
 ### 4.1 identity (accounts, sessions, devices)
 | Field | Subject | Class | Purpose | Basis | Retention | Deletion |
 |---|---|---|---|---|---|---|
-| Mobile number | Patient, doctor, clinic admin | P | P-ACCOUNT / D-PROFILE | C / D | RET-01 | DEL-ERASE |
-| Full name | All users | P | P-ACCOUNT / D-PROFILE | C / D | RET-01 | DEL-ERASE |
-| Date of birth | Patient | P | P-ACCOUNT (18+ check); P-CARE (age on prescription) | C | RET-01; copy in each prescription follows RET-02 | DEL-ERASE |
-| Sex | Patient | P | P-CARE (prescription format) [CONFIRM it is needed] | C | RET-01; prescription copy RET-02 | DEL-ERASE |
-| Preferred language | All users | P | P-ACCOUNT | C | RET-01 | DEL-SELF / DEL-ERASE |
-| Role(s), account status | All users | T | P-ACCOUNT / D-PROFILE | C / D | RET-01 | DEL-ERASE |
-| Device ID, push token, app version | All users | T | P-ACCOUNT (secure sign-in, remote sign-out, E-DP-07) | C | RET-01 (token replaced on change) | DEL-ERASE |
-| Session tokens | All users | T | P-ACCOUNT | C | RET-12 | DEL-TTL |
-| OTP codes and attempt counts | All users | T | P-ACCOUNT (rate limiting) | C | RET-12 | DEL-TTL |
-| MFA factor | Doctor, clinic admin, staff | T | D-PROFILE (K-SEC-03) | D | RET-01 | DEL-ERASE |
-| Clinic staff account: name, mobile, work email (optional), role, clinic | Clinic staff | P | D-STAFF (staff account, role-limited access) | C (D-STAFF@1) | RET-01; deleted when removed by the clinic, or 30 days after the clinic leaves | DEL-ERASE |
-| Pending invitation: name, mobile, role, inviting clinic | Invited doctor or staff (third party) | P | Send one invitation | D (clinic confirms it told them, Provider Agreement B1) | Deleted 30 days after sending if not accepted | DEL-TTL |
-| Age-gate rejection count | none (count only) | T | Reporting | n/a | RET-16 | n/a |
+| Mobile number | Patient, doctor, clinic admin | PER (field-level encrypted + blind index) | P-ACCOUNT / D-PROFILE | C / D | RET-01 | DEL-ERASE |
+| Full name | All users | PER | P-ACCOUNT / D-PROFILE | C / D | RET-01 | DEL-ERASE |
+| Date of birth | Patient | PER | P-ACCOUNT (18+ check); P-CARE (age on prescription) | C | RET-01; copy in each prescription follows RET-02 | DEL-ERASE |
+| Sex | Patient | PER | P-CARE (prescription format) [CONFIRM it is needed] | C | RET-01; prescription copy RET-02 | DEL-ERASE |
+| Preferred language | All users | PER | P-ACCOUNT | C | RET-01 | DEL-SELF / DEL-ERASE |
+| Role(s), account status | All users | PER | P-ACCOUNT / D-PROFILE | C / D | RET-01 | DEL-ERASE |
+| Device ID, push token, app version | All users | PER | P-ACCOUNT (secure sign-in, remote sign-out, E-DP-07) | C | RET-01 (token replaced on change) | DEL-ERASE |
+| Session tokens | All users | PER-K | P-ACCOUNT | C | RET-12 | DEL-TTL |
+| OTP codes and attempt counts | All users | PER-K (hashed) | P-ACCOUNT (rate limiting) | C | RET-12 | DEL-TTL |
+| MFA factor | Doctor, clinic admin, staff | PER-K | D-PROFILE (K-SEC-03) | D | RET-01 | DEL-ERASE |
+| Clinic staff account: name, mobile, work email (optional), role, clinic | Clinic staff | PER | D-STAFF (staff account, role-limited access) | C (D-STAFF@1) | RET-01; deleted when removed by the clinic, or 30 days after the clinic leaves | DEL-ERASE |
+| Pending invitation: name, mobile, role, inviting clinic | Invited doctor or staff (third party) | PER | Send one invitation | D (clinic confirms it told them, Provider Agreement B1) | Deleted 30 days after sending if not accepted | DEL-TTL |
+| Age-gate rejection count | none (count only) | INT | Reporting | n/a | RET-16 | n/a |
 
 ### 4.2 records (consent, sharing, uploads, access log, rights)
 | Field | Subject | Class | Purpose | Basis | Retention | Deletion |
 |---|---|---|---|---|---|---|
-| Consent record: user key, purpose ID, text version, notice version, action, time, channel, evidence ref | Patient | P | Proof of consent (K-DP-02) | L | RET-05 | DEL-RESTRICT |
-| History-sharing grant: doctor, scope, start, expiry, revoked time | Patient, doctor | S | P-SHARE | C | RET-06 | DEL-RESTRICT |
-| Uploaded document (file) and metadata (title, type, date) | Patient | S | P-RECORD | C | RET-03 | DEL-SELF / DEL-ERASE |
-| Virus-scan result | Patient | T | P-RECORD | C | RET-03 | with the document |
-| Record access log: who, when, record ref, reason | Patient, doctor, staff | S | Security; shown to the patient (R-83) | C / L | RET-06 | DEL-RESTRICT |
-| Nominee: name, relation, phone | Nominee (third party) | P | Data-rights nominee (C02) | L | RET-15 | DEL-ERASE |
-| Data-rights request: type, dates, outcome | Patient | P | C02 compliance | L | RET-09 | DEL-JOB |
+| Consent record: user key, purpose ID, text version, notice version, action, time, channel, evidence ref | Patient | PER | Proof of consent (K-DP-02) | L | RET-05 | DEL-RESTRICT |
+| History-sharing grant: doctor, scope, start, expiry, revoked time | Patient, doctor | SH-L | P-SHARE | C | RET-06 | DEL-RESTRICT |
+| Uploaded document (file) and metadata (title, type, date) | Patient | SH-C | P-RECORD | C | RET-03 | DEL-SELF / DEL-ERASE |
+| Virus-scan result | Patient | INT | P-RECORD | C | RET-03 | with the document |
+| Record access log: who, when, record ref, reason | Patient, doctor, staff | SH-L | Security; shown to the patient (R-83) | C / L | RET-06 | DEL-RESTRICT |
+| Nominee: name, relation, phone | Nominee (third party) | PER (contact: field-level encrypted) | Data-rights nominee (C02) | L | RET-15 | DEL-ERASE |
+| Data-rights request: type, dates, outcome | Patient | PER | C02 compliance | L | RET-09 | DEL-JOB |
 
 ### 4.3 directory (doctor and clinic profiles)
 | Field | Subject | Class | Purpose | Basis | Retention | Deletion |
 |---|---|---|---|---|---|---|
-| Doctor display name, specialty, qualifications, languages | Doctor | Pub | D-PROFILE | D | While listed | Removed from search on leaving; verification copy RET-08 |
-| Registration number and council (shown on profile and prescription, R-15) | Doctor | Pub | D-PROFILE; legal display (C09, C10) | D / L | While listed; prescription copy RET-02 | as above |
-| Profile photo | Doctor | Pub | D-PROFILE | D | While listed | DEL-ERASE. **Check the NMC Oct 2026 advertising guidelines before display (C11, open decision 7).** |
-| Fee, consult modes, timings | Doctor, clinic | Pub | D-PROFILE | D | While listed | Removed on leaving |
-| Clinic name, address, map location, phone | Clinic | Pub | D-PROFILE; radius search (R-20) | D | While listed | Removed on leaving |
-| Clinic registration documents, HFR ID | Clinic | P | D-VERIFY (C24) | D / L | RET-08 | DEL-RESTRICT |
+| Doctor display name, specialty, qualifications, languages | Doctor | PUB | D-PROFILE | D | While listed | Removed from search on leaving; verification copy RET-08 |
+| Registration number and council (shown on profile and prescription, R-15) | Doctor | PUB | D-PROFILE; legal display (C09, C10) | D / L | While listed; prescription copy RET-02 | as above |
+| Profile photo | Doctor | PUB | D-PROFILE | D | While listed | DEL-ERASE. **Check the NMC Oct 2026 advertising guidelines before display (C11, open decision 7).** |
+| Fee, consult modes, timings | Doctor, clinic | PUB | D-PROFILE | D | While listed | Removed on leaving |
+| Clinic name, address, map location, phone | Clinic | PUB | D-PROFILE; radius search (R-20) | D | While listed | Removed on leaving |
+| Clinic registration documents, HFR ID | Clinic | PER | D-VERIFY (C24) | D / L | RET-08 | DEL-RESTRICT |
 
 ### 4.4 verification (F17-a)
 | Field | Subject | Class | Purpose | Basis | Retention | Deletion |
 |---|---|---|---|---|---|---|
-| Registration number, council, year, qualification | Doctor | P | D-VERIFY (C10) | D / L | RET-08 | DEL-RESTRICT |
-| Identity document image | Doctor | P | D-VERIFY | D | **90 days after decision** (RET-08) | DEL-JOB. **Aadhaar card not accepted; if one is received, the reviewer rejects it and it is deleted at once (AAD-04 in docs/privacy/aadhaar-policy.md; C23, K-DP-05; open decision 16).** |
-| Verification photo | Doctor | P | D-VERIFY | D | RET-08 | DEL-RESTRICT |
-| Automatic check results and registry snapshots | Doctor, clinic | P | D-VERIFY | D / L | RET-08 | DEL-RESTRICT |
-| Decision, reviewer, reasons, four-eyes override | Doctor, clinic, staff | P | D-VERIFY (K-CS-01) | L | RET-08 | DEL-RESTRICT |
-| Re-verification dates and outcomes | Doctor | P | D-VERIFY (R-13) | L | RET-08 | DEL-RESTRICT |
+| Registration number, council, year, qualification | Doctor | PER | D-VERIFY (C10) | D / L | RET-08 | DEL-RESTRICT |
+| Identity document image | Doctor | PER (high risk: ID document) | D-VERIFY | D | **90 days after decision** (RET-08) | DEL-JOB. **Aadhaar card not accepted; if one is received, the reviewer rejects it and it is deleted at once (AAD-04 in docs/privacy/aadhaar-policy.md; C23, K-DP-05; open decision 16).** |
+| Verification photo | Doctor | PER (no automated face matching) | D-VERIFY | D | RET-08 | DEL-RESTRICT |
+| Automatic check results and registry snapshots | Doctor, clinic | PER | D-VERIFY | D / L | RET-08 | DEL-RESTRICT |
+| Decision, reviewer, reasons, four-eyes override | Doctor, clinic, staff | PER | D-VERIFY (K-CS-01) | L | RET-08 | DEL-RESTRICT |
+| Re-verification dates and outcomes | Doctor | PER | D-VERIFY (R-13) | L | RET-08 | DEL-RESTRICT |
 
 ### 4.5 booking (F1-a)
 | Field | Subject | Class | Purpose | Basis | Retention | Deletion |
 |---|---|---|---|---|---|---|
-| Appointment: patient ref, doctor, clinic, slot, type, status | Patient, doctor | P (S in context: reveals a specialty) | P-CARE | C | RET-01; if it led to a consultation, RET-02 | DEL-ERASE / DEL-RESTRICT |
-| Slot hold | Patient | T | P-CARE (no double booking) | C | RET-12 | DEL-TTL |
-| Cancellation or reschedule reason | Patient, doctor | P | P-CARE (refund rules, R-32) | C | RET-01; refund-related copy RET-04 | DEL-ERASE |
-| Reason for visit (free text) | Patient | S | P-CARE | C | RET-02 | DEL-RESTRICT. **Not in requirements; [CONFIRM] whether we collect it at all.** |
-| Doctor availability rules | Doctor | T | D-PROFILE | D | While listed | Removed on leaving |
+| Appointment: patient ref, doctor, clinic, slot, type, status | Patient, doctor | SH-L | P-CARE | C | RET-01; if it led to a consultation, RET-02 | DEL-ERASE / DEL-RESTRICT |
+| Slot hold | Patient | SH-L | P-CARE (no double booking) | C | RET-12 | DEL-TTL |
+| Cancellation or reschedule reason | Patient, doctor | PER if pick-list; SH-C if free text | P-CARE (refund rules, R-32) | C | RET-01; refund-related copy RET-04 | DEL-ERASE |
+| Reason for visit (free text) | Patient | SH-C | P-CARE | C | RET-02 | DEL-RESTRICT. **Not in requirements; [CONFIRM] whether we collect it at all.** |
+| Doctor availability rules | Doctor | PUB | D-PROFILE | D | While listed | Removed on leaving |
 
 ### 4.6 payments (F6-a)
 | Field | Subject | Class | Purpose | Basis | Retention | Deletion |
 |---|---|---|---|---|---|---|
-| Order and payment ID, amount, status, payment-company reference | Patient | F | P-CARE; tax | C / L | RET-04 | DEL-RESTRICT |
-| **Card, UPI or bank details** | none | none | **Never stored** (K-PAY-01, C18) | none | none | none |
-| Refund status and reason | Patient | F | P-CARE (R-61) | C / L | RET-04 | DEL-RESTRICT |
-| Invoice: name, amount, invoice number, GST details | Patient, clinic | F | Tax (C20) | L | RET-04 | DEL-RESTRICT |
-| Clinic billing details and GSTIN (clinic-collected fallback, R-62) | Clinic | F | D-PAY | D / L | RET-04 | DEL-RESTRICT |
-| Linked-account reference at the payment company (split mode only) | Clinic | F | D-PAY | D | RET-04 | DEL-RESTRICT |
-| Reconciliation records and webhooks | none (references only) | T/F | Tax, integrity (R-63) | L | RET-04 | DEL-RESTRICT |
+| Order and payment ID, amount, status, payment-company reference | Patient | PER-F (SH-L when shown with the doctor) | P-CARE; tax | C / L | RET-04 | DEL-RESTRICT |
+| **Card, UPI or bank details** | none | Prohibited | **Never stored** (K-PAY-01, C18) | none | none | none |
+| Refund status and reason | Patient | PER-F | P-CARE (R-61) | C / L | RET-04 | DEL-RESTRICT |
+| Invoice: name, amount, invoice number, GST details | Patient, clinic | PER-F | Tax (C20) | L | RET-04 | DEL-RESTRICT |
+| Clinic billing details and GSTIN (clinic-collected fallback, R-62) | Clinic | PER-F | D-PAY | D / L | RET-04 | DEL-RESTRICT |
+| Linked-account reference at the payment company (split mode only) | Clinic | PER-F | D-PAY | D | RET-04 | DEL-RESTRICT |
+| Reconciliation records and webhooks | none (references only) | PER-F | Tax, integrity (R-63) | L | RET-04 | DEL-RESTRICT |
 
 ### 4.7 consult (F1-b)
 | Field | Subject | Class | Purpose | Basis | Retention | Deletion |
 |---|---|---|---|---|---|---|
-| Room ID and join tokens | Patient, doctor | T | P-CARE | C | RET-12 | DEL-TTL |
-| Join and leave times, duration | Patient, doctor | P | P-CARE; teleconsult record (C09) | C / L | RET-02 | DEL-RESTRICT |
-| Teleconsultation consent (time, booking ID) | Patient | S | C09 | L | RET-02 | DEL-RESTRICT |
-| Connection quality metrics | none (pseudonymous) | T | Service quality | C | RET-07 | DEL-ROLL |
-| **Video or audio recording** | none | none | **Not recorded** (ADR-13) | none | none | none |
+| Room ID and join tokens | Patient, doctor | PER-K | P-CARE | C | RET-12 | DEL-TTL |
+| Join and leave times, duration | Patient, doctor | SH-L | P-CARE; teleconsult record (C09) | C / L | RET-02 | DEL-RESTRICT |
+| Teleconsultation consent (time, booking ID) | Patient | SH-L | C09 | L | RET-02 | DEL-RESTRICT |
+| Connection quality metrics | none (pseudonymous) | PER (pseudonymous) | Service quality | C | RET-07 | DEL-ROLL |
+| **Video or audio recording** | none | Prohibited | **Not recorded** (ADR-13) | none | none | none |
 
 ### 4.8 clinical (F1-c)
 | Field | Subject | Class | Purpose | Basis | Retention | Deletion |
 |---|---|---|---|---|---|---|
-| Clinical notes, with signed versions (K-CS-05) | Patient | S | P-CARE / P-RECORD | C / L | RET-02 | DEL-RESTRICT |
-| Diagnosis or provisional diagnosis | Patient | S | P-CARE | C / L | RET-02 | DEL-RESTRICT |
-| Prescription items: drug, dose, frequency, duration, instructions, injections, tests | Patient | S | P-CARE | C / L | RET-02 | DEL-RESTRICT |
-| Rules-engine decision and block reason | Patient, doctor | S | Safety (K-CS-02, C09, C13) | L | RET-02 | DEL-RESTRICT |
-| Prescription PDF | Patient | S | P-CARE / P-RECORD | C / L | RET-02 | DEL-RESTRICT |
-| Doctor signing record (who, when, key ref) | Doctor | P | Integrity (C12, proposed row N5) | L | RET-02 | DEL-RESTRICT |
-| Prescription templates | Doctor | T | D-PROFILE (R-53) | D | While listed | DEL-ERASE |
+| Clinical notes, with signed versions (K-CS-05) | Patient | SH-C | P-CARE / P-RECORD | C / L | RET-02 | DEL-RESTRICT |
+| Diagnosis or provisional diagnosis | Patient | SH-C | P-CARE | C / L | RET-02 | DEL-RESTRICT |
+| Prescription items: drug, dose, frequency, duration, instructions, injections, tests | Patient | SH-C | P-CARE | C / L | RET-02 | DEL-RESTRICT |
+| Rules-engine decision and block reason | Patient, doctor | SH-C | Safety (K-CS-02, C09, C13) | L | RET-02 | DEL-RESTRICT |
+| Prescription PDF | Patient | SH-C | P-CARE / P-RECORD | C / L | RET-02 | DEL-RESTRICT |
+| Doctor signing record (who, when, key ref) | Doctor | PER | Integrity (C12, proposed row N5) | L | RET-02 | DEL-RESTRICT |
+| Prescription templates | Doctor | INT (must hold no patient data) | D-PROFILE (R-53) | D | While listed | DEL-ERASE |
 
 ### 4.9 scheduler-core (separate service, F10-a)
 | Field | Subject | Class | Purpose | Basis | Retention | Deletion |
 |---|---|---|---|---|---|---|
-| Opaque activity ref, recurrence rule, time zone | Patient (pseudonymous) | P | P-REMIND | C | Until the schedule ends or the account closes | DEL-ERASE. **No health data by design** (R-75): reminder wording is built by notifications at send time. |
-| Occurrences and dispatch status | Patient (pseudonymous) | T | P-REMIND | C | Rolling window + 90 days | DEL-ROLL |
+| Opaque activity ref, recurrence rule, time zone | Patient (pseudonymous) | PER (pseudonymous) | P-REMIND | C | Until the schedule ends or the account closes | DEL-ERASE. **No health data by design** (R-75): reminder wording is built by notifications at send time. |
+| Occurrences and dispatch status | Patient (pseudonymous) | PER (pseudonymous) | P-REMIND | C | Rolling window + 90 days | DEL-ROLL |
 
 ### 4.10 notifications
 | Field | Subject | Class | Purpose | Basis | Retention | Deletion |
 |---|---|---|---|---|---|---|
-| Channel choice per reminder type; medicine-names flag | Patient | P | P-REMIND, P-MEDNAMES | C | RET-01 | DEL-ERASE |
-| SMS delivery log: phone, DLT template ID, status | Patient | P | P-REMIND, P-ACCOUNT | C | RET-10 | DEL-ROLL |
-| Push delivery log | Patient | T | P-REMIND | C | RET-10 | DEL-ROLL |
-| WhatsApp opt-in (time, source) and delivery log | Patient | P | P-WHATSAPP | C | RET-05 / RET-10 | **ON HOLD: not collected until WhatsApp resumes** |
+| Channel choice per reminder type; medicine-names flag | Patient | PER | P-REMIND, P-MEDNAMES | C | RET-01 | DEL-ERASE |
+| SMS delivery log: phone, DLT template ID, status | Patient | PER (no variables logged) | P-REMIND, P-ACCOUNT | C | RET-10 | DEL-ROLL |
+| Push delivery log | Patient | PER | P-REMIND | C | RET-10 | DEL-ROLL |
+| WhatsApp opt-in (time, source) and delivery log | Patient | PER | P-WHATSAPP | C | RET-05 / RET-10 | **ON HOLD: not collected until WhatsApp resumes** |
 
 ### 4.11 admin and audit
 | Field | Subject | Class | Purpose | Basis | Retention | Deletion |
 |---|---|---|---|---|---|---|
-| Grievance: reference, contact, text, dates, outcome | Patient, doctor | P (may contain S) | C02, C08, C19 | L | RET-09 | DEL-JOB |
-| Support ticket | Any user | P (may contain S) | Support | C | RET-09 | DEL-JOB |
-| Staff just-in-time access: staff, reason, scope, start and end | Staff, patient | P | K-SEC-08 | L | RET-06 | DEL-RESTRICT |
-| Staff accounts (name, work email, role, MFA) | Staff | P | Employment, security | L | Employment + 1 year [CONFIRM] | DEL-JOB |
-| Audit events (actor, action, subject ref, time, hash chain) | All | P | Tamper-evident audit | L | Longest of the related records | DEL-RESTRICT. The hash chain must survive deletion (store references, not content). |
+| Grievance: reference, contact, text, dates, outcome | Patient, doctor | SH-C | C02, C08, C19 | L | RET-09 | DEL-JOB |
+| Support ticket | Any user | SH-C | Support | C | RET-09 | DEL-JOB |
+| Staff just-in-time access: staff, reason, scope, start and end | Staff, patient | SH-L | K-SEC-08 | L | RET-06 | DEL-RESTRICT |
+| Staff accounts (name, work email, role, MFA) | Staff | PER | Employment, security | L | Employment + 1 year [CONFIRM] | DEL-JOB |
+| Audit events (actor, action, subject ref, time, hash chain) | All | SH-L | Tamper-evident audit | L | Longest of the related records | DEL-RESTRICT. The hash chain must survive deletion (store references, not content). |
 
 ### 4.12 analytics, logs, marketing, v0
 | Field | Subject | Class | Purpose | Basis | Retention | Deletion |
 |---|---|---|---|---|---|---|
-| Analytics `user_key` (random) and events | Patient, doctor | P (pseudonymous) | P-ANALYTICS (opt-in per S-010 draft) | C | RET-11 | DEL-ROLL; link deleted on erasure |
-| IP address, user agent, request ID, scrubbed error traces | All users | T | Security (C07) | L | RET-07 | DEL-ROLL |
-| Waitlist contact (email or phone), time, text version | Prospect | P | P-WAITLIST | C | RET-13 | DEL-JOB |
-| v0: name, phone, transcribed prescription, reminder schedule, feedback notes, consent form scan | Pilot patient | S | V0-PILOT, V0-FEEDBACK | C | RET-14 | DEL-JOB, with a deletion record kept |
+| Analytics `user_key` (random) and events | Patient, doctor | PER (pseudonymous) | P-ANALYTICS (opt-in per S-010 draft) | C | RET-11 | DEL-ROLL; link deleted on erasure |
+| IP address, user agent, request ID, scrubbed error traces | All users | PER | Security (C07) | L | RET-07 | DEL-ROLL |
+| Waitlist contact (email or phone), time, text version | Prospect | PER | P-WAITLIST | C | RET-13 | DEL-JOB |
+| v0: name, phone, transcribed prescription, reminder schedule, feedback notes, consent form scan | Pilot patient | SH-C | V0-PILOT, V0-FEEDBACK | C | RET-14 | DEL-JOB, with a deletion record kept |
 
 ## 5. Processors (vendor register skeleton, C06 and K-DP-08)
 
@@ -191,6 +236,8 @@ No vendor receives personal data until it has a processor agreement and appears 
 | SMS provider (DLT) | Phone, template text (discreet) | [FILL] | [FILL] | S-041 |
 | Push (FCM / APNs) | Push token, discreet text | Outside India (Google, Apple) [VALIDATE against decision 4: no health data in pushes] | Platform terms | ADR-15 |
 | Video provider | Room tokens, session metadata | India region (ADR-13) | [FILL] | spike a08 |
+| **Crash reporting / app performance monitoring** (added 2026-11-16, review R-05) | Device ID, IP address, app version, scrubbed stack traces (no request data) | **Self-hosted or India-processing only** | [FILL] | S-095 / mobile rule M5 |
+| Electronic signature provider (P09) | Document hash, signer name and registration number | India (licensed eSign service provider, if that method is chosen under N5) | [FILL] | N5 decision |
 | Payment aggregator | Amount, reference, phone | India | [FILL] | S-040 |
 | Verification API (if bought) | Doctor registration details | [FILL] | [FILL] | S-042 |
 | Geocoding | Clinic address (not patient location) | [FILL] | [FILL] | ADR-16 |
@@ -204,6 +251,7 @@ No vendor receives personal data until it has a processor agreement and appears 
 |---|---|---|
 | Inventory complete for v1.0 fields | **Yes, as a draft.** All v1.0 modules (identity, records, directory, verification, booking, payments, consult, clinical, scheduler-core, notifications, admin, audit, analytics, logs) plus waitlist and v0 are covered; each field has a purpose, basis, retention rule and deletion path. | Section 4 |
 | Medical-record retention justified | **Yes, pending the lawyer.** | Section 2 (3 years after the last consultation, plus legal hold) |
+| Every field classified (S-044) | **Yes** | Section 4.0 scheme and handling rules; Class column on all 71 rows |
 
 **Story status:** In Testing. It is Done when the founder approves, the lawyer confirms RET-02, RET-05, RET-06, RET-09 and the fiduciary question, and the CA confirms RET-04. New fields get added here in their own PRs (K-DP-06).
 

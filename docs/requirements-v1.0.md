@@ -22,11 +22,11 @@ Contract IDs (K-…) come from the Contracts sheet.
 | F1-a | Appointment booking |
 | F1-b | Online consultation |
 | F1-c | Doctor notes + structured prescription |
-| F1-d | Reminders on by default (includes F1.2/F1.3 reminders and F7-a) |
+| F1-d | Reminders from every prescription item, **once the patient opts in (P-REMIND)**; then on by default per item (includes F1.2/F1.3 reminders and F7-a). Updated 2026-11-16, compliance review R-10 |
 | F2-a | Basic medical history with consent |
 | F5-a | Range-based clinic and doctor finder |
 | F6-a | Payment before consultation |
-| F11-a | WhatsApp channel (booking and reminders) |
+| F11-a | WhatsApp channel (booking and reminders). **ON HOLD (founder, 14 Nov 2026): not in v1.0** |
 | F10-a | Calendar core engine (separate service) |
 
 ---
@@ -38,7 +38,7 @@ Contract IDs (K-…) come from the Contracts sheet.
 |---|---|---|---|---|
 | R-01 | Patient | Sign up and log in with my mobile number and OTP. | OTP login works; no password required; rate-limited; session can be ended from all devices. | M |
 | R-02 | Patient | See and accept a clear privacy notice and give specific consent before any processing. | Notice in plain language; separate consent for each purpose; consent stored with version and time; can be withdrawn (K-DP-02). | M |
-| R-03 | Patient | Manage my profile and communication preferences. | Can edit name, language, channel per reminder type; WhatsApp opt-in/out takes effect immediately (F11-a). | M |
+| R-03 | Patient | Manage my profile and communication preferences. | Can edit name, language, channel per reminder type; WhatsApp opt-in/out takes effect immediately (F11-a, **on hold: hidden in v1.0**). | M |
 | R-04 | Patient | Request deletion of my data and raise a grievance. | Grievance contact visible; erasure request reaches all stores (K-DP-07). | M |
 | R-05 | Clinic admin | Create and manage a clinic profile and its doctors. | Clinic address, map location, registration documents captured; owning doctor linked. | M |
 
@@ -62,7 +62,7 @@ Contract IDs (K-…) come from the Contracts sheet.
 | ID | Role | Story | Acceptance criteria | Pri |
 |---|---|---|---|---|
 | R-30 | Doctor/Clinic admin | Set availability for in-person and online slots. | Recurring availability; slots regenerate on change; works for a clinic with several doctors. | M |
-| R-31 | Patient | Book an in-person or online slot. | No double booking (unique doctor+slot with a short hold); confirmation by app and WhatsApp. | M |
+| R-31 | Patient | Book an in-person or online slot. | No double booking (unique doctor+slot with a short hold); confirmation by app (push) and SMS (WhatsApp on hold). | M |
 | R-32 | Patient | Reschedule or cancel. | Rules by time to appointment; refund per policy (see R-60). | M |
 | R-33 | Clinic admin | See the day's appointments. | Day view with status; updates live. | M |
 | R-34 | Doctor | Be notified of new, changed and cancelled bookings. | Notification within 60 s. | M |
@@ -85,9 +85,9 @@ Contract IDs (K-…) come from the Contracts sheet.
 ### 2.7 Reminders and calendar (F1-d, F10-a, F11-a)
 | ID | Role | Story | Acceptance criteria | Pri |
 |---|---|---|---|---|
-| R-70 | Patient | Get reminders created automatically from every prescription item (doses, injection dates, tests due). | On by default; can switch off item by item; 99.9% sent within 60 s of due time. | M |
+| R-70 | Patient | Get reminders created automatically from every prescription item (doses, injection dates, tests due). | **Only after the patient opts in to prescription reminders (P-REMIND, DPDP s.6(1)); offered at sign-up and when a prescription arrives.** Once on, on by default for each item; can switch off item by item; 99.9% sent within 60 s of due time. | M |
 | R-71 | Patient | See my medicines, appointments, injections and tests in a calendar (today, week, month). | Event types: medicine dose, injection, appointment, test due. | M |
-| R-72 | Patient | Receive reminders on WhatsApp as well as the app. | Official WhatsApp Business Platform, approved templates, recorded opt-in, immediate opt-out. | M |
+| R-72 | Patient | Receive reminders on WhatsApp as well as the app. | Official WhatsApp Business Platform, approved templates, recorded opt-in, immediate opt-out. **ON HOLD: not in v1.0 (founder, 14 Nov 2026).** | On hold |
 | R-73 | Patient | Choose my channel per reminder type. | Discreet by default: no diagnosis; medicine names only if I opt in (K-DP-09). | M |
 | R-74 | System | Keep reminders working offline and during provider outages. | On-device backup; retry with backoff; channel fallback; no silent loss. | M |
 | R-75 | Developer | Run the calendar as a separate service with its own API and data. | `scheduler-core` holds no health logic and never reads the health DB; stores only external references. | M |

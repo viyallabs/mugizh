@@ -24,7 +24,7 @@ Each low-rated review was matched to themes using its category and keywords in t
 | T07 | **Rushed or poor consultations; the patient cannot choose or change the doctor** | 34 | Assigned an inexperienced doctor and could not switch | **The patient always chooses a named, verified doctor**, and sees their qualifications, registration and (from v1.1) verified reviews. There is no auto-assignment in v1.0. Specialty is shown only with a recognised qualification. | S-119, S-120, S-209; RG-04 | Whether Practo's online consults auto-assign doctors |
 | T08 | **Unsafe prescribing or advice** (all Critical): sleeping pills after a 3-minute mental-health consult, prescriptions without a proper look, medicine for a baby causing harm | 9 | Psychiatric consult under three minutes, with sleeping pills prescribed | The telemedicine rules engine (List A needs video first; Schedule X and NDPS blocked; diagnosis required, check P05). Adults only in v1.0. **Ask the doctor reviewer whether some specialties, such as psychiatry, need a minimum consult standard or video-only rule.** | E-RX-01; S-012, S-138; S-029 review question | — |
 | T09 | **Negative reviews hidden, or the app forces a rating** before treatment | 16 | The app forced a rating when going back during an active consult | Only completed visits can review. A rating prompt only after completion, never blocking navigation. Negative reviews never hidden. No paid ranking. | E-REV-01; **new E-REV-03**; S-209, S-213, S-214; CD-05, CD-08 | Rating prompt timing in Practo |
-| T10 | **Spam and sales calls** after browsing a profile; repeated bot calls | 21 | An AI bot kept calling about doctor advice and tests despite hang-ups | No marketing without the P-NEWS opt-in. No automated or sales calls. SMS only through registered service templates. Quiet hours. | **New E-MSG-01**; S-141; K-MSG-01, K-MSG-03; consent-texts P-NEWS | Whether calls follow profile views |
+| T10 | **Spam and sales calls** after browsing a profile; repeated bot calls | 21 | An AI bot kept calling about doctor advice and tests despite hang-ups | No marketing without the P-NEWS opt-in. No automated or sales calls. SMS only through registered service templates. Quiet hours. | **New E-MSG-02**; S-141; K-MSG-01, K-MSG-03; consent-texts P-NEWS | Whether calls follow profile views |
 
 **Outside v1.0 scope:**
 - **Lab tests** (7 reviews): add these themes when lab partners arrive in v2.0 (S-231).
@@ -44,5 +44,5 @@ Each low-rated review was matched to themes using its category and keywords in t
 | E-BK-09 | T04: clinic charges more at the counter than the fee shown in the app |
 | E-PAY-05 | T02: refund from the clinic's account fails (low balance) in clinic-collected mode |
 | E-REV-03 | T09: rating prompt before the consult has finished |
-| E-MSG-01 | T10: a marketing message attempted without opt-in |
+| E-MSG-02 | T10: a marketing message attempted without opt-in |
 | E-RX-06 | T05: video drops to audio before the prescription is signed (first proposed in S-012) |

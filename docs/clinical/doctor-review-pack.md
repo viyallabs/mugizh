@@ -58,7 +58,10 @@
 
 ## Part 4 — Wording
 
-12. Review the clinical wording of the block messages in [rules/IN/telemedicine-rules.v1.draft.yaml](rules/IN/telemedicine-rules.v1.draft.yaml) (`reasons`), and the reminder SMS texts SMS-09 to SMS-11 in [messaging-compliance-plan.md](../messaging/messaging-compliance-plan.md).
+14. Review the clinical wording of the block messages in [rules/IN/telemedicine-rules.v1.draft.yaml](rules/IN/telemedicine-rules.v1.draft.yaml) (`reasons`), and the reminder SMS texts SMS-09 to SMS-11 in [messaging-compliance-plan.md](../messaging/messaging-compliance-plan.md).
+15. Also review (from S-089):
+    - the pre-join teleconsultation text, including the emergency line ([consent-texts.md](../privacy/consent-texts.md) §C);
+    - the fixed lines on the prescription PDF ([telemedicine-rules-spec.md](telemedicine-rules-spec.md) §8).
 
 ## Sign-off record (to copy into the Edge Cases sheet)
 

@@ -22,7 +22,7 @@ rules:
   - { id: RF01, trigger: payment_debited_booking_failed, applies_to: any,       refund_pct: 100, auto: true,  ref: E-PAY-02 }
   - { id: RF02, trigger: duplicate_payment,             applies_to: any,       refund_pct: 100, auto: true,  ref: E-PAY-03 }
   - { id: RF03, trigger: doctor_not_joined,             applies_to: online,    refund_pct: 100, auto: true,  ref: E-BK-04 }
-  - { id: RF04, trigger: clinic_or_doctor_cancelled,    applies_to: any,       refund_pct: 100, auto: true,  alt: free_reschedule, ref: E-BK-06 }
+  - { id: RF04, trigger: clinic_or_doctor_cancelled,    applies_to: any,       refund_pct: 100, auto: true,  alt: free_reschedule, ref: "E-BK-06, E-VER-06" }   # includes the system cancelling because the doctor was suspended (review R-07); reschedule only with another Verified doctor
   - { id: RF05, trigger: technical_failure_recorded,    applies_to: online,    refund_pct: 100, auto: true,  alt: free_reschedule }
   - { id: RF06, trigger: converted_to_in_person,        applies_to: online,    refund_pct: 50,  auto: true,  alt: credit_to_in_person_visit }   # [CONFIRM]
   - { id: RF07, trigger: patient_cancelled, before_minutes_gte: 120, applies_to: any, refund_pct: 100, auto: true }

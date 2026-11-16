@@ -56,6 +56,12 @@ consult:
   # The mode used for prescribing is the mode in effect when the prescription is signed.
   # A video consult that dropped to audio before signing is treated as audio.
   mode_for_rules: mode_at_signing
+  # The guidelines cover teleconsultations with patients in India only; consultations outside India's
+  # jurisdiction are excluded (compliance review 2026-11-16, issue R-02) [VALIDATE].
+  patient_location:
+    remote_modes_allowed_for: [IN]            # patient must be in India for video, audio or text
+    evidence: [patient_declaration_at_booking, patient_declaration_at_prejoin]   # shown to the doctor
+    in_person: any                            # a patient travelling to India can book in person
   types: [first, follow_up]
   follow_up:
     same_doctor: true
@@ -136,6 +142,7 @@ prescription_checks:
   - { id: P07, check: structured_dose_fields_complete, reason: RX_DOSE_INCOMPLETE }       # E-RX-02; never inferred (K-CS-03)
   - { id: P08, check: doctor_reauthenticated_step_up, reason: RX_SIGNATURE_REQUIRED }      # K-SEC-03: proves WHO is signing
   - { id: P09, check: prescription_signed_with_approved_signature_method, reason: RX_ESIGN_REQUIRED }   # C12, N5: authenticates the DOCUMENT
+  - { id: P10, check: patient_declared_in_india_for_remote_consult, reason: RX_PATIENT_OUTSIDE_INDIA }   # remote modes only; guidelines scope (R-02)
 # P08 and P09 are different things. Step-up authentication is not a signature.
 # P09 signs a hash of the final prescription with the method the lawyer approves under the IT Act 2000 (N5), e.g. an
 # electronic signature from a licensed eSign service provider or a Class 3 digital signature certificate. The signed
@@ -196,3 +203,4 @@ reasons:
   RX_DOSE_INCOMPLETE:       { key: rx.block.dose,             en: "Complete the dose, frequency and duration fields." }
   RX_SIGNATURE_REQUIRED:    { key: rx.block.signature,        en: "Confirm your identity again to sign this prescription." }
   RX_ESIGN_REQUIRED:        { key: rx.block.esign,            en: "Sign this prescription with your electronic signature to issue it." }
+  RX_PATIENT_OUTSIDE_INDIA: { key: rx.block.outside_india,    en: "Online consultations are only for patients who are in India. Ask the patient to visit the clinic when they are in India." }

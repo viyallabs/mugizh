@@ -239,7 +239,7 @@ scheduler-core never sees a medicine name, a diagnosis or a phone number. It kno
 1. The doctor submits their council, registration number and documents. Evidence goes to object storage. **Aadhaar cards are rejected and deleted at once** (AAD-04, K-DP-05).
 2. The verification state machine runs the checks through adapters: manual review (always available), and later a vendor or register API (S-111 is deferred until after the beta).
 3. A reviewer decides in the Admin console. The decision and its evidence references are audit-logged.
-4. directory lists the doctor and booking accepts bookings **only while the doctor is Verified**, checked on the server for every action (K-CS-01). A re-verification job moves expired doctors to "Suspended".
+4. directory lists the doctor and booking accepts bookings **only while the doctor is Verified**, checked on the server for every action (K-CS-01). A re-verification job moves expired doctors to "Suspended". **On suspension, booking cancels the doctor's future appointments automatically, payments refunds them in full (RF04), and patients are told and offered another doctor; the clinic is told too** (compliance review R-07, E-VER-06).
 
 ### 5.5 Refund when the doctor doesn't show
 
