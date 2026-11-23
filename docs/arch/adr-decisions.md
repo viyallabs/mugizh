@@ -116,7 +116,7 @@ Keep the sheet's proposal: **TypeScript end to end, NestJS, React Native (Expo),
 ## 6. Founder decisions on the tech stack (2026-11-16)
 
 **Status:** recorded from the founder's message and answers. The **Architecture sheet still shows "Proposed"** for every ADR; update it when you confirm this section (Accepted or Changed, with "Decided on").
-**Not yet in `CLAUDE.md` §4**, which still says the stack is undecided (proposed wording in §6.5; Claude does not edit it without your approval).
+**CLAUDE.md §4 updated 2026-11-16** after the founder asked Claude to evaluate and confirm the proposals (§6.7).
 
 ### 6.1 What was decided
 
@@ -199,3 +199,29 @@ The risk is something working in dev and failing in staging because the clouds d
 5. Consent cache approach (decided in S-097 after measurement).
 6. Why OCI for dev (cost or credits?), and whether the two-cloud cost in §6.3 is acceptable.
 7. ADR-21 retention, scheduler-core option, ADR-27 to 29, and accepting the 15 stack-independent ADRs (§5 table, still pending).
+
+### 6.7 Proposals evaluated and confirmed (2026-11-16)
+
+The founder asked Claude to check whether each proposal in §6.2 is the best fit for this application, and to confirm it. Criteria:
+- compliance: data stays in our India-hosted systems; the contracts can be enforced;
+- the same behaviour on OCI dev and AWS staging;
+- a small team;
+- patient-safety and security maturity.
+
+| ADR | Confirmed choice | Why it is the best fit | Condition or follow-up |
+|---|---|---|---|
+| **ADR-03** Backend | **Go standard `net/http` + `chi`**, **OpenAPI-first** with `oapi-codegen` (strict server); **`pgx` + `sqlc`** for typed SQL; **`slog`**; **OpenTelemetry** | OpenAPI stays the single source of truth (K-ARC-06). Typed SQL keeps each module's schema and grants explicit (K-ARC-01). Few dependencies means a smaller attack surface (K-SEC-06). | Golang-migrate or Atlas for migrations: pick in S-090 |
+| **ADR-07** Queue | **PostgreSQL-backed queue: River** | The job is saved **in the same transaction** as the state change, which makes the outbox (ADR-28) and the audit outbox exact. Scheduled jobs for reminders. No Redis to run on two clouds. 1M reminders/day is about 12 per second on average, with peaks in the hundreds; well inside its range [VALIDATE in S-068]. | **S-068 must pass** (99.9% within 60 s). Fallback: asynq (Redis) or AWS SQS behind the same `jobs` interface |
+| **ADR-24** Repo | **Plain monorepo:** `go.work` (Go modules) + **pnpm** workspace (React Native, Next.js) + **Taskfile** | Turborepo and Nx are JavaScript-only. Go `internal/` packages plus **golangci-lint `depguard`** enforce module walls (K-ARC-01) and "no vendor SDK outside `adapters/`" (K-ARC-03). | Layout drafted in S-090 |
+| **ADR-25** Testing | Go `testing` + **testcontainers** (real PostgreSQL + PostGIS, same major version as AWS); **govulncheck, gosec, Semgrep, Gitleaks, Trivy**; **Playwright** (web); **Maestro** (mobile; simpler than Detox for React Native); **k6**; **OWASP ZAP** | Real-database tests prove grants, locks and the booking constraint. Every tool runs in GitLab CI. | — |
+| **ADR-10** CI/CD and IaC | **GitLab CI** + **OpenTofu** (open-source, Terraform-compatible), two provider sets (OCI dev, AWS staging/prod/DR) | The repo is on GitLab. OpenTofu avoids Terraform licence questions and uses the same providers. | Short-lived credentials: GitLab OIDC to AWS (supported). For OCI dev, use OIDC token exchange if available, otherwise a protected CI variable scoped to dev only (synthetic data) [VALIDATE] |
+| **ADR-11** Identity | **Ory Kratos, self-hosted** (Go; Apache 2.0). Our own `identity` module adds patient device binding and maps step-up to signing (P08). | Self-hosted, so identity data stays in our India database and behaves the same on both clouds. It supports passkeys/WebAuthn and TOTP for doctors and staff (K-SEC-03, TM-04, TM-36), and step-up ("privileged session"). Its SMS courier calls **our** SMS adapter, so OTPs go only through DLT templates (K-MSG-01). Keycloak would add Java and custom Java plugins for DLT SMS. Building our own login is the riskiest choice. | **Spike in S-104/S-105:** OTP through the courier → our DLT adapter, rate limits (E-SEC-01), device binding, step-up. If it fails, Keycloak is the fallback |
+| **ADR-30** Client types | **openapi-typescript** (+ openapi-fetch) generating TypeScript types and clients for React Native and Next.js; CI fails if generated code is stale | One contract for two languages; lightweight | — |
+| **ADR-31** Dual-cloud rules | The §6.3 rules, enforced by checks in S-092 | Keeps OCI dev equal to AWS staging | — |
+| **ADR-04 detail** Mobile | **Expo with prebuild (dev builds)**, built in **our GitLab CI**, so signing keys stay with us; EAS optional | Native modules we need (screenshot blocking, SPKI pinning, keystore) work through config plugins and prebuild | Confirm each native library in S-090 |
+| **S-097 consent cache** | Default: **in-process cache, TTL of a few seconds, invalidated by PostgreSQL LISTEN/NOTIFY on revocation**; no Redis | Meets "revocation acts at once" (E-DP-01) without new infrastructure | Measure the under-20 ms target in S-097 |
+
+**Still the founder's to decide** (not technical fits Claude can settle):
+1. The Oracle reading: OCI for dev only, no Oracle Database in the app.
+2. Accepting the two-cloud cost, or moving dev to AWS (§6.3).
+3. ADR-21 retention, the scheduler-core option, ADR-27 to 29, and the 15 stack-independent ADRs (§5).

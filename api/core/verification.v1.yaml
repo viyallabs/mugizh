@@ -1,0 +1,599 @@
+openapi: 3.1.0
+info:
+  title: Core API — verification
+  version: 1.0.0
+  description: |
+    Professional verification (F17, S-109, S-110, S-129). A doctor enters registration
+    details, uploads evidence, submits, and reads their own status. A reviewer works the
+    queue and records decisions. Nothing is ever approved automatically: a human reviewer
+    decides (E-VER-01). A rejection, or Verified over a failed automated check, needs a
+    second, different reviewer (four-eyes).
+
+    Evidence upload: files are sent as base64 in JSON, one file per request, and the whole
+    body stays under the 1 MB API limit (API standards section 8), so a file can be about
+    700 KB. Apps must compress ID photos before upload. The service accepts up to 10 MB, so
+    a direct or signed-URL upload can be added later without an API break. Accepted types
+    are image/jpeg, image/png and application/pdf, checked by their first bytes.
+
+    Clinic (facility) verification (D-38): the clinic's administrator, acting for that
+    clinic only, saves a draft, uploads documents and submits; any other clinic answers
+    404. Reviewers decide clinic cases in the same queue (subjectKind = clinic; a clinic
+    case shows the registering authority in councilCode and the legal name in
+    registeredName), with the same four-eyes rules. The clinic admin needs consent D-VERIFY.
+
+    Photo ID types come from the country pack's allow-list; a prohibited identity document
+    is never accepted. Reviewer operations are declared x-roles: [reviewer]. Staff sign-in
+    is not built in v1.0, so they are unreachable until it is (the policy check refuses
+    staff roles). No personal data in URLs (K-DP-04).
+tags:
+  - name: verification
+    description: Doctor submission and own status
+  - name: clinic-verification
+    description: Clinic (facility) submission and own status, by the clinic's administrator
+  - name: verification-review
+    description: Reviewer queue and decisions
+paths:
+  /v1/me/verification:
+    get:
+      operationId: getMyVerification
+      tags: [verification]
+      summary: My verification case and its status
+      x-roles: [doctor]
+      x-ownership: self
+      responses:
+        '200':
+          description: The caller's own case
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VerificationCase' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/me/verification/draft:
+    put:
+      operationId: saveVerificationDraft
+      tags: [verification]
+      summary: Create or replace my draft (needs consent D-VERIFY)
+      x-roles: [doctor]
+      x-ownership: self
+      x-consent: D-VERIFY
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VerificationDraft' }
+      responses:
+        '200':
+          description: The saved draft
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VerificationCase' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/me/verification/evidence:
+    post:
+      operationId: uploadVerificationEvidence
+      tags: [verification]
+      summary: Upload one evidence file (base64, under 1 MB request body)
+      x-roles: [doctor]
+      x-ownership: self
+      x-consent: D-VERIFY
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EvidenceUpload' }
+      responses:
+        '201':
+          description: Stored (encrypted)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvidenceMeta' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+        '415': { $ref: '#/components/responses/Problem' }
+  /v1/me/verification/evidence/{evidenceId}:
+    delete:
+      operationId: deleteVerificationEvidence
+      tags: [verification]
+      summary: Withdraw one of my uploads (permanent)
+      x-roles: [doctor]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/EvidenceId'
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/me/verification/submit:
+    post:
+      operationId: submitVerification
+      tags: [verification]
+      summary: Send my draft for review (needs consent D-VERIFY)
+      x-roles: [doctor]
+      x-ownership: self
+      x-consent: D-VERIFY
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Submitted; a reviewer decides
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VerificationCase' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/clinics/{clinicId}/verification:
+    get:
+      operationId: getClinicVerification
+      tags: [clinic-verification]
+      summary: My clinic's verification case and its status
+      x-roles: [clinic_admin]
+      x-ownership: clinic
+      parameters:
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/ClinicHeader'
+      responses:
+        '200':
+          description: The clinic's case
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClinicVerificationCase' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/clinics/{clinicId}/verification/draft:
+    put:
+      operationId: saveClinicVerificationDraft
+      tags: [clinic-verification]
+      summary: Create or replace my clinic's draft (needs consent D-VERIFY)
+      x-roles: [clinic_admin]
+      x-ownership: clinic
+      x-consent: D-VERIFY
+      parameters:
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/ClinicHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClinicVerificationDraft' }
+      responses:
+        '200':
+          description: The saved draft
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClinicVerificationCase' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/clinics/{clinicId}/verification/evidence:
+    post:
+      operationId: uploadClinicVerificationEvidence
+      tags: [clinic-verification]
+      summary: Upload one clinic document (base64, under 1 MB request body)
+      x-roles: [clinic_admin]
+      x-ownership: clinic
+      x-consent: D-VERIFY
+      parameters:
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/ClinicHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EvidenceUpload' }
+      responses:
+        '201':
+          description: Stored (encrypted)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvidenceMeta' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+        '415': { $ref: '#/components/responses/Problem' }
+  /v1/clinics/{clinicId}/verification/evidence/{evidenceId}:
+    delete:
+      operationId: deleteClinicVerificationEvidence
+      tags: [clinic-verification]
+      summary: Withdraw one of my clinic's uploads (permanent)
+      x-roles: [clinic_admin]
+      x-ownership: clinic
+      parameters:
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/ClinicHeader'
+        - $ref: '#/components/parameters/EvidenceId'
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/clinics/{clinicId}/verification/submit:
+    post:
+      operationId: submitClinicVerification
+      tags: [clinic-verification]
+      summary: Send my clinic's draft for review (needs consent D-VERIFY)
+      x-roles: [clinic_admin]
+      x-ownership: clinic
+      x-consent: D-VERIFY
+      parameters:
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/ClinicHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Submitted; a reviewer decides
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClinicVerificationCase' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/reviews/queue:
+    get:
+      operationId: listVerificationQueue
+      tags: [verification-review]
+      summary: Cases waiting for a decision, oldest first
+      x-roles: [reviewer]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Queue page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QueueList' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /v1/reviews/cases/{caseId}:
+    get:
+      operationId: getVerificationReviewCase
+      tags: [verification-review]
+      summary: Open a case (audited)
+      x-roles: [reviewer]
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      responses:
+        '200':
+          description: The case with checks and decision log
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReviewCase' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/reviews/cases/{caseId}/evidence/{evidenceId}:
+    get:
+      operationId: getVerificationEvidence
+      tags: [verification-review]
+      summary: Read one evidence file (audited)
+      x-roles: [reviewer]
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/EvidenceId'
+      responses:
+        '200':
+          description: The decrypted file
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvidenceContent' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '410': { $ref: '#/components/responses/Problem' }
+  /v1/reviews/cases/{caseId}/decision:
+    post:
+      operationId: recordVerificationDecision
+      tags: [verification-review]
+      summary: Record a decision with a mandatory reason code (four-eyes applies)
+      x-roles: [reviewer]
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DecisionRequest' }
+      responses:
+        '200':
+          description: Recorded as final, or as a proposal awaiting a second reviewer
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DecisionResult' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/reviews/cases/{caseId}/evidence/{evidenceId}/prohibited-id:
+    post:
+      operationId: reportProhibitedIdDocument
+      tags: [verification-review]
+      summary: Checklist action - the file is a prohibited identity document; delete it at once and ask for another ID
+      x-roles: [reviewer]
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/EvidenceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Hard-deleted and audited; the doctor is asked for another ID }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '410': { $ref: '#/components/responses/Problem' }
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, format: uuid }
+    CaseId:
+      name: caseId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    EvidenceId:
+      name: evidenceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ClinicId:
+      name: clinicId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ClinicHeader:
+      name: X-Clinic-Id
+      in: header
+      required: false
+      description: Which clinic to act for, when the caller administers more than one
+      schema: { type: string, format: uuid }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string, maxLength: 200 }
+  responses:
+    Problem:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string }
+        detail: { type: string }
+        instance: { type: string }
+        traceId: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, code]
+            properties:
+              field: { type: string }
+              code: { type: string }
+    VerificationStatus:
+      type: string
+      enum: [draft, submitted, checking, needs_info, verified, rejected, suspended, expired, re_verify_due]
+      x-extensible-enum: true
+    VerificationDraft:
+      type: object
+      additionalProperties: false
+      description: |
+        The council is mandatory free text (the country pack has no council list yet) and
+        is normalised by the server. Any input holding a prohibited identifier is
+        rejected and nothing is stored.
+      properties:
+        councilCode: { type: string, maxLength: 80 }
+        registrationNumber: { type: string, maxLength: 60 }
+        registrationYear: { type: integer, minimum: 1900, maximum: 2200 }
+        registeredName: { type: string, maxLength: 160 }
+        qualifications:
+          type: array
+          maxItems: 10
+          items: { type: string, maxLength: 100 }
+        specialtyClaim: { type: string, maxLength: 100 }
+        idType: { type: string, maxLength: 40 }
+    ClinicVerificationDraft:
+      type: object
+      additionalProperties: false
+      description: |
+        A clinic's registration or establishment details (D-38). The registering authority
+        is free text, normalised by the server. Any input holding a prohibited identifier is
+        rejected and nothing is stored. A clinic sends registration and establishment
+        documents only (registration_certificate, establishment_proof), never a photo ID.
+      properties:
+        authorityName: { type: string, maxLength: 80 }
+        registrationNumber: { type: string, maxLength: 60 }
+        registrationYear: { type: integer, minimum: 1900, maximum: 2200 }
+        legalName: { type: string, maxLength: 160 }
+    ClinicVerificationCase:
+      type: object
+      required: [id, clinicId, status, roundState, round, evidence]
+      properties:
+        id: { type: string, format: uuid }
+        clinicId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/VerificationStatus' }
+        roundState: { type: string, enum: [draft, submitted, checking, needs_info, decided], x-extensible-enum: true }
+        round: { type: integer }
+        authorityName: { type: string }
+        registrationNumber: { type: string }
+        registrationYear: { type: integer }
+        legalName: { type: string }
+        evidence:
+          type: array
+          items: { $ref: '#/components/schemas/EvidenceMeta' }
+        infoRequested:
+          type: string
+          description: Reason code when the reviewer asked for more information
+        submittedAt: { type: string, format: date-time }
+        verifiedAt: { type: string, format: date-time }
+        reVerifyDueAt: { type: string, format: date-time }
+    EvidenceUpload:
+      type: object
+      additionalProperties: false
+      required: [kind, contentBase64]
+      properties:
+        kind: { type: string, enum: [registration_certificate, degree, photo_id, verification_photo, establishment_proof], x-extensible-enum: true }
+        contentType: { type: string, enum: [image/jpeg, image/png, application/pdf] }
+        contentBase64: { type: string, maxLength: 990000 }
+    EvidenceMeta:
+      type: object
+      required: [id, kind, contentType, sizeBytes, state, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string }
+        contentType: { type: string }
+        sizeBytes: { type: integer }
+        state: { type: string, enum: [stored, deleted, purged], x-extensible-enum: true }
+        createdAt: { type: string, format: date-time }
+    EvidenceContent:
+      type: object
+      required: [contentType, contentBase64]
+      properties:
+        contentType: { type: string }
+        contentBase64: { type: string }
+    VerificationCase:
+      type: object
+      required: [id, status, roundState, round, qualifications, evidence]
+      properties:
+        id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/VerificationStatus' }
+        roundState: { type: string, enum: [draft, submitted, checking, needs_info, decided], x-extensible-enum: true }
+        round: { type: integer }
+        councilCode: { type: string }
+        registrationNumber: { type: string }
+        registrationYear: { type: integer }
+        registeredName: { type: string }
+        qualifications:
+          type: array
+          items: { type: string }
+        specialtyClaim: { type: string }
+        idType: { type: string }
+        evidence:
+          type: array
+          items: { $ref: '#/components/schemas/EvidenceMeta' }
+        infoRequested:
+          type: string
+          description: Reason code when the reviewer asked for more information
+        submittedAt: { type: string, format: date-time }
+        verifiedAt: { type: string, format: date-time }
+        reVerifyDueAt: { type: string, format: date-time }
+    QueueItem:
+      type: object
+      required: [caseId, subjectRef, status, submittedAt, dueBy, overdue, awaitingSecond, reverification]
+      properties:
+        caseId: { type: string, format: uuid }
+        subjectRef: { type: string, format: uuid }
+        subjectKind: { type: string, enum: [doctor, clinic], x-extensible-enum: true }
+        status: { $ref: '#/components/schemas/VerificationStatus' }
+        submittedAt: { type: string, format: date-time }
+        dueBy: { type: string, format: date-time }
+        overdue: { type: boolean }
+        autoCheck: { type: string, enum: ['', passed, failed] }
+        awaitingSecond: { type: boolean }
+        reverification: { type: boolean }
+    QueueList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/QueueItem' }
+        nextCursor: { type: string }
+    CheckResult:
+      type: object
+      required: [source, outcome, checkedAt]
+      properties:
+        source: { type: string }
+        outcome: { type: string }
+        registeredName: { type: string }
+        checkedAt: { type: string, format: date-time }
+    DecisionEntry:
+      type: object
+      required: [stage, outcome, reasonCode, reviewerRef, override, decidedAt]
+      properties:
+        stage: { type: string, enum: [proposed, final] }
+        outcome: { type: string }
+        reasonCode: { type: string }
+        reviewerRef: { type: string, format: uuid }
+        override: { type: boolean }
+        decidedAt: { type: string, format: date-time }
+    ReviewCase:
+      allOf:
+        - $ref: '#/components/schemas/VerificationCase'
+        - type: object
+          required: [subjectRef, manualFlags, checks, decisions, overdue]
+          properties:
+            subjectRef: { type: string, format: uuid }
+            subjectKind: { type: string, enum: [doctor, clinic], x-extensible-enum: true }
+            autoCheck: { type: string, enum: ['', passed, failed] }
+            manualFlags:
+              type: array
+              items: { type: string }
+            checks:
+              type: array
+              items: { $ref: '#/components/schemas/CheckResult' }
+            decisions:
+              type: array
+              items: { $ref: '#/components/schemas/DecisionEntry' }
+            pendingOutcome: { type: string }
+            pendingBy: { type: string, format: uuid }
+            specialtyConfirmed: { type: boolean }
+            reviewDueBy: { type: string, format: date-time }
+            overdue: { type: boolean }
+    DecisionRequest:
+      type: object
+      additionalProperties: false
+      required: [outcome, reasonCode]
+      properties:
+        outcome: { type: string, enum: [verified, rejected, needs_info] }
+        reasonCode: { type: string, pattern: '^[a-z_]{1,60}$' }
+        licenceExpiresOn: { type: string, format: date }
+        specialtyConfirmed: { type: boolean }
+    DecisionResult:
+      type: object
+      required: [status, final, awaitingSecond]
+      properties:
+        status: { $ref: '#/components/schemas/VerificationStatus' }
+        final: { type: boolean }
+        awaitingSecond: { type: boolean }

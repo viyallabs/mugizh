@@ -1,0 +1,299 @@
+openapi: 3.1.0
+info:
+  title: Core API — notifications (my preferences and reminders)
+  version: 1.0.0
+  description: |
+    The patient's notification preferences (S-141, S-156): which channels may carry each
+    kind of message, discreet mode, quiet hours and time zone. Consent (P-REMIND,
+    P-MEDNAMES, P-NEWS) is managed in the records module and checked again at send time.
+    The reminder calendar (S-153), the actions on a reminder (S-154) and the on-device backup schedule (S-165) are here too. The occurrence.due receiver is an internal,
+    signed callback that is not part of this specification.
+tags:
+  - name: notifications
+    description: Notification preferences
+paths:
+  /v1/me/notification-preferences:
+    get:
+      operationId: getNotificationPreferences
+      tags: [notifications]
+      summary: My notification preferences
+      x-roles: [patient]
+      x-ownership: self
+      responses:
+        '200':
+          description: Preferences (defaults when never changed)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationPreferences' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+    put:
+      operationId: updateNotificationPreferences
+      tags: [notifications]
+      summary: Replace my notification preferences
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NotificationPreferences' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationPreferences' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /v1/me/reminders:
+    get:
+      operationId: listMyReminders
+      tags: [notifications]
+      summary: My reminder calendar (medicines, injections, tests and follow-ups) for a range
+      description: |
+        S-153. The caller's own reminder occurrences with from <= dueAt < to, ordered by dueAt then id. The range is at
+        most 31 days (the app asks for today, a week or a month, with the day boundaries in the patient's own zone).
+        Appointments are not here: the app merges them from the booking list.
+
+        label is for the signed-in app (it may name the medicine). notificationText is what a notification for this
+        occurrence would say now: it names a medicine only while the medicine-names consent is on and discreet mode is
+        off, so the app can use it for the on-device backup schedule (S-165). Ids are stable. The response carries an
+        ETag; send it back in If-None-Match and a 304 means the cached copy is current. The app keeps the last
+        response to show offline.
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - { name: from, in: query, required: true, description: Earliest dueAt (inclusive)., schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: true, description: Latest dueAt (exclusive); at most 31 days after from., schema: { type: string, format: date-time } }
+        - { name: If-None-Match, in: header, required: false, schema: { type: string, maxLength: 80 } }
+      responses:
+        '200':
+          description: The reminders in the range
+          headers:
+            ETag: { description: Version tag of this response., schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReminderList' }
+        '304': { description: The cached copy is current }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/me/reminders/device-schedule:
+    get:
+      operationId: getMyReminderDeviceSchedule
+      tags: [notifications]
+      summary: My on-device backup schedule for the next 72 hours
+      description: |
+        S-165 (E-REM-02, TC-40). The local notifications the app schedules so reminders still fire with no network:
+        every entry with generatedAt <= fireAt < validUntil (72 hours), ordered by fireAt. Each entry is exactly what
+        the server itself would send and when: reminders for the same minute are one entry (E-REM-03); the body names
+        a medicine only while the medicine-names consent is on and discreet mode is off; non-critical reminders follow
+        quiet hours as the server does (moved to the end of the window, or left out when that would be too late);
+        doses already taken, skipped or missed are left out; a snoozed dose fires at the snooze time.
+
+        Schedule each entry with its replaceKey as the local notification identifier (Android notification tag, iOS
+        request identifier). The server push for the same minute carries the same key, so a phone that is online
+        shows one notification, not two. With remindersOn false (the reminders consent is off) the app cancels every
+        backup. Replace the whole local schedule with each answer; never keep an entry past validUntil.
+
+        Fetch again by refreshAfter, on opening the app, and whenever a silent push with data {"sync": "reminders"}
+        arrives (sent when the reminders or medicine-names consent, the notification preferences, a dose action or
+        the prescription reminders change). truncated means more entries exist than fit (iOS keeps 64 pending local
+        notifications per app); refreshAfter is then no later than the last entry. The response carries an ETag;
+        a 304 means the schedule the app holds is current. The app keeps it encrypted (mobile-data-protection).
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - { name: If-None-Match, in: header, required: false, schema: { type: string, maxLength: 80 } }
+      responses:
+        '200':
+          description: The schedule
+          headers:
+            ETag: { description: Version tag of this response., schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeviceSchedule' }
+        '304': { description: The schedule the app holds is current }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/me/reminders/{occurrenceId}/actions:
+    post:
+      operationId: recordReminderAction
+      tags: [notifications]
+      summary: Mark a reminder taken, skipped or snoozed
+      description: |
+        S-154. The Idempotency-Key is the client action ID: the app makes one per tap, stores the action while offline
+        and sends it later with the time the patient acted. A retry with the same key returns the same answer.
+
+        Rules: taken and skipped are final; the first one wins, the same one again succeeds, a different one is
+        409 reminders.action_conflict. snoozed asks for one more notification after snoozeMinutes (5 to 60, default
+        10), one snooze at a time (reminders.snooze_active), at most 3 per reminder (reminders.snooze_limit); a snooze
+        must reach the server within 15 minutes of actedAt. actedAt may not be more than 5 minutes ahead of the
+        server clock, nor more than 1 hour before the reminder is due, nor more than 24 hours after it
+        (reminders.acted_at_out_of_range). Someone else's reminder is 404.
+      x-roles: [patient]
+      x-ownership: self
+      x-side-effect: message
+      parameters:
+        - name: occurrenceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Client action ID (UUID).
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReminderActionRequest' }
+      responses:
+        '200':
+          description: Recorded (also when the same action had already been recorded)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReminderActionResult' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, format: uuid }
+  responses:
+    Problem:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string }
+        detail: { type: string }
+        instance: { type: string }
+        traceId: { type: string }
+    ReminderOccurrence:
+      type: object
+      required: [id, kind, dueAt, timeZone, state, snoozeCount, label, notificationText]
+      properties:
+        id: { type: string, format: uuid, description: Stable occurrence ID. }
+        kind: { type: string, enum: [medicine, injection, test], x-extensible-enum: true }
+        dueAt: { type: string, format: date-time, description: Due instant (UTC). }
+        timeZone: { type: string, maxLength: 64, description: IANA zone of the reminder; show dueAt in it. }
+        state: { type: string, enum: [due, taken, skipped, snoozed, missed], x-extensible-enum: true }
+        actedAt: { type: string, format: date-time, description: When the patient marked it taken or skipped. }
+        snoozedUntil: { type: string, format: date-time, description: Present while state is snoozed. }
+        snoozeCount: { type: integer, minimum: 0 }
+        label: { type: string, maxLength: 200, description: Text for the signed-in app; may name the medicine. }
+        notificationText: { type: string, maxLength: 200, description: Text for a notification now; names a medicine only with the medicine-names consent. }
+    ReminderList:
+      type: object
+      required: [reminders, from, to]
+      properties:
+        reminders:
+          type: array
+          maxItems: 1500
+          items: { $ref: '#/components/schemas/ReminderOccurrence' }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+    DeviceScheduleEntry:
+      type: object
+      required: [replaceKey, fireAt, titleKey, body, screen, occurrenceIds]
+      properties:
+        replaceKey: { type: string, pattern: '^rem-[0-9]{1,12}-[cn]$', maxLength: 20, description: Local notification identifier; the server push for the same minute uses it too. }
+        fireAt: { type: string, format: date-time, description: When to show it (UTC). }
+        titleKey: { type: string, maxLength: 80, description: Translation key of the title. }
+        body: { type: string, maxLength: 400, description: Text to show; names a medicine only with the medicine-names consent. }
+        screen: { type: string, maxLength: 40, description: Screen to open on tap. }
+        occurrenceIds:
+          type: array
+          minItems: 1
+          maxItems: 100
+          description: The reminders this notification covers (several when grouped).
+          items: { type: string, format: uuid }
+    DeviceSchedule:
+      type: object
+      required: [generatedAt, validUntil, refreshAfter, remindersOn, truncated, entries]
+      properties:
+        generatedAt: { type: string, format: date-time }
+        validUntil: { type: string, format: date-time, description: No entry is at or after this instant (72 hours ahead). }
+        refreshAfter: { type: string, format: date-time, description: Fetch again by this instant. }
+        remindersOn: { type: boolean, description: False when the reminders consent is off; cancel every backup. }
+        truncated: { type: boolean, description: More entries exist than fit; fetch again by refreshAfter. }
+        entries:
+          type: array
+          maxItems: 60
+          items: { $ref: '#/components/schemas/DeviceScheduleEntry' }
+    ReminderActionRequest:
+      type: object
+      additionalProperties: false
+      required: [action, actedAt]
+      properties:
+        action: { type: string, enum: [taken, skipped, snoozed] }
+        actedAt: { type: string, format: date-time, description: When the patient acted (device clock, UTC). }
+        snoozeMinutes: { type: integer, minimum: 5, maximum: 60, description: "snoozed only; default 10." }
+    ReminderActionResult:
+      type: object
+      required: [id, state, snoozeCount]
+      properties:
+        id: { type: string, format: uuid }
+        state: { type: string, enum: [due, taken, skipped, snoozed, missed], x-extensible-enum: true }
+        actedAt: { type: string, format: date-time }
+        snoozedUntil: { type: string, format: date-time }
+        snoozeCount: { type: integer, minimum: 0 }
+    ChannelChoice:
+      type: object
+      additionalProperties: false
+      required: [messageType, channels]
+      properties:
+        messageType:
+          type: string
+          description: Kind of message, for example booking, reminder, prescription, refund.
+          pattern: '^[a-z][a-z_]{0,30}$'
+        channels:
+          type: array
+          maxItems: 3
+          description: Channels the patient allows for this kind. Push is always tried first. WhatsApp is not available.
+          items: { type: string, enum: [push, sms, email], x-extensible-enum: true }
+    NotificationPreferences:
+      type: object
+      additionalProperties: false
+      required: [channels, discreet, quietHoursEnabled, timeZone, locale]
+      properties:
+        channels:
+          type: array
+          maxItems: 30
+          items: { $ref: '#/components/schemas/ChannelChoice' }
+        discreet:
+          type: boolean
+          description: When on, notifications never show medicine names, even if the medicine-names consent is given.
+        quietHoursEnabled:
+          type: boolean
+          description: Hold non-urgent messages during quiet hours. Medicine reminders at your chosen times are never held.
+        timeZone:
+          type: string
+          description: IANA time zone name.
+          maxLength: 64
+        locale:
+          type: string
+          maxLength: 16

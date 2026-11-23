@@ -1,0 +1,82 @@
+# golangci-lint v2 (S-091). Run: task lint  (tools/dev.sh backend golangci-lint run ./...)
+version: "2"
+run:
+  timeout: 5m
+  tests: true
+linters:
+  default: none
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - ineffassign
+    - unused
+    - gosec
+    - bodyclose
+    - errorlint
+    - misspell
+    - revive
+    - depguard
+  settings:
+    staticcheck:
+      # QF* are optional quick-fix style suggestions, not defects.
+      checks: ["all", "-QF1001", "-ST1000"]
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+        - name: var-naming
+        - name: error-return
+        - name: error-naming
+        - name: if-return
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: receiver-naming
+        - name: unreachable-code
+        - name: unused-parameter
+          disabled: true
+    # Mirrors backend/archtest (the archtest is the authority; this gives faster editor feedback).
+    depguard:
+      rules:
+        no-std-log:
+          # K-DP-04: use platform/logging. cmd/ entry points may use std log.
+          list-mode: lax
+          files: ["!**/cmd/**", "!**/archtest/**", "$all"]
+          allow:
+            - log/slog
+          deny:
+            - pkg: log
+              desc: K-DP-04 use *slog.Logger from internal/platform/logging; std log is allowed only in cmd/
+        no-cloud-sdk:
+          # ADR-31, K-ARC-03: cloud SDKs only in internal/adapters/<kind>/<vendor>/
+          list-mode: lax
+          files: ["!**/internal/adapters/*/*/**", "$all"]
+          deny:
+            - pkg: github.com/aws/
+              desc: cloud SDKs only under internal/adapters/<kind>/<vendor>/ (ADR-31)
+            - pkg: github.com/oracle/oci-go-sdk
+              desc: cloud SDKs only under internal/adapters/<kind>/<vendor>/ (ADR-31)
+            - pkg: cloud.google.com/
+              desc: cloud SDKs only under internal/adapters/<kind>/<vendor>/ (ADR-31)
+            - pkg: github.com/Azure/
+              desc: cloud SDKs only under internal/adapters/<kind>/<vendor>/ (ADR-31)
+        no-raw-crypto:
+          # encryption-design 10.1, K-DP-03
+          list-mode: lax
+          files: ["!**/internal/platform/crypto/**", "!**/internal/platform/keys/**", "!**/internal/adapters/keys/**", "$all"]
+          deny:
+            - pkg: crypto/aes
+              desc: use internal/platform/crypto (K-DP-03)
+            - pkg: crypto/cipher
+              desc: use internal/platform/crypto (K-DP-03)
+            - pkg: golang.org/x/crypto
+              desc: only inside internal/platform/crypto and keys
+  exclusions:
+    presets:
+      - comments
+      - std-error-handling
+formatters:
+  enable:
+    - gofmt

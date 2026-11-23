@@ -1,0 +1,139 @@
+# Synthetic prescribing rules for test country XX. NOT clinical content: the structure of a real ruleset with made-up
+# values, so that core code that hard-codes the India ruleset fails the tests (TC-53). The reviewer fields name the
+# fixture, not a person; this file is never loaded outside local, test and dev (fake adapters only).
+pack: XX
+ruleset: telemedicine-prescribing
+version: 1.0.0
+status: approved
+source:
+  title: Synthetic telemedicine rules for test country XX
+  issued_by: Test fixture
+  date: 2026-01-01
+  amendments: []
+reviewed_by: "synthetic fixture (test country XX; not a clinical review)"
+legal_reviewed_by: "synthetic fixture (test country XX; not a legal review)"
+drug_classification:
+  source: synthetic drug table (drugs/classification.yaml)
+  version_ref: required
+  membership: multiple
+  precedence:
+    - prohibited
+    - amendment_exception
+    - [list_o, list_a, list_b]
+  import_validation:
+    - drug_matches_prohibited_and_is_in_a_permitted_list_without_amendment_exception
+    - amendment_exception_names_a_drug_not_in_the_drug_master
+    - list_b_drug_without_a_condition_tag
+consult:
+  modes: [video, audio, text, in_person]
+  remote_modes: [video, audio, text]
+  v1_enabled_modes: [video, audio, in_person]
+  mode_for_rules: mode_at_signing
+  patient_location:
+    remote_modes_allowed_for: [PT]
+    evidence: [patient_declaration_at_booking, patient_declaration_at_prejoin]
+    in_person: any
+  types: [first, follow_up]
+  follow_up:
+    same_doctor: true
+    requires_prior_in_person_consult: true
+    window:
+      months: 4
+      measured_from: last_in_person_consult
+      time_zone: patient
+      month_end: clamp
+      inclusive: true
+    same_health_condition: doctor_attests
+    exclusions:
+      - new_symptoms_outside_same_condition
+      - doctor_does_not_recall_previous_context
+    prior_in_person_evidence:
+      - platform_in_person_consult_record
+      - doctor_attestation_with_date
+  item_condition_scope: [same_condition, new_condition]
+  new_condition_item_evaluated_as: first
+  initiators: [patient, doctor, caregiver, health_worker]
+categories:
+  prohibited:
+    description: Synthetic prohibited list.
+    match:
+      curated: true
+    except_by_amendment: []
+  list_o:
+    description: Synthetic list O.
+    match:
+      curated: true
+  list_a:
+    description: Synthetic list A. First prescription only in a video consult.
+    match:
+      curated: true
+      includes_by_amendment: []
+  list_b:
+    description: Synthetic list B.
+    match:
+      curated: true
+regulatory_rules:
+  - { id: R01, category: prohibited, consult_type: any, mode: remote, context: any, outcome: block, reason: RX_PROHIBITED }
+  - { id: R02, category: any, consult_type: any, mode: in_person, context: any, outcome: allow, reason: null }
+  - { id: R03, category: list_o, consult_type: first, mode: remote, context: any, outcome: allow, reason: null }
+  - { id: R04, category: list_a, consult_type: first, mode: video, context: new_drug, outcome: allow, reason: null }
+  - { id: R05, category: list_a, consult_type: first, mode: [audio, text], context: any, outcome: block, reason: RX_NEEDS_VIDEO_FIRST }
+  - { id: R06, category: list_o, consult_type: follow_up, mode: remote, context: any, outcome: allow, reason: null }
+  - { id: R07, category: list_a, consult_type: follow_up, mode: remote, context: refill, outcome: allow, reason: null }
+  - { id: R08, category: list_b, consult_type: follow_up, mode: remote, context: add_on, outcome: allow, reason: null }
+  - { id: R09, category: list_a, consult_type: follow_up, mode: video, context: [new_drug, add_on], outcome: allow, reason: null }
+  - { id: R10, category: list_a, consult_type: follow_up, mode: [audio, text], context: [new_drug, add_on], outcome: block, reason: RX_NEEDS_VIDEO_FIRST }
+platform_rules:
+  - { id: PL01, applies_to: prohibited, mode: in_person, outcome: block, reason: RX_PROHIBITED_IN_PRODUCT, decision: fixture, basis: "synthetic" }
+  - { id: PL02, applies_to: unclassified, mode: remote, outcome: block, reason: RX_NOT_CLASSIFIED, decision: fixture, basis: "fail closed" }
+prescription_checks:
+  - { id: P01, check: doctor_verified_and_active, reason: RX_DOCTOR_NOT_VERIFIED }
+  - { id: P02, check: patient_identity_confirmed_by_doctor, reason: RX_IDENTITY_NOT_CONFIRMED }
+  - { id: P03, check: patient_age_present, reason: RX_AGE_MISSING }
+  - { id: P04, check: teleconsult_consent_recorded, reason: RX_CONSENT_MISSING }
+  - { id: P05, check: diagnosis_or_provisional_diagnosis_present, reason: RX_DIAGNOSIS_MISSING }
+  - { id: P06, check: follow_up_attestations_present_if_follow_up, reason: RX_FOLLOW_UP_NOT_ESTABLISHED }
+  - { id: P07, check: structured_dose_fields_complete, reason: RX_DOSE_INCOMPLETE }
+  - { id: P08, check: doctor_reauthenticated_step_up, reason: RX_SIGNATURE_REQUIRED }
+  - { id: P09, check: prescription_signed_with_approved_signature_method, reason: RX_ESIGN_REQUIRED }
+  - { id: P10, check: patient_declared_in_india_for_remote_consult, reason: RX_PATIENT_OUTSIDE_INDIA }
+audit:
+  store: [ruleset_version, drug_classification_version, item_inputs, rule_ids_matched, layer, outcome, reason, evaluated_at_utc]
+doctor_judgement:
+  information_inadequate: doctor may end the consult without prescribing
+  emergency: doctor advises immediate care and refers
+  consult_outcomes: [completed_with_prescription, completed_without_prescription, referred_in_person, emergency_referral]
+consent:
+  implied_when_initiator: [patient]
+  explicit_when_initiator: [doctor, caregiver, health_worker]
+  explicit_forms: [in_app_tap]
+  record_fields: [booking_id, initiator, consent_type, time_utc, channel]
+pharmacy_transmission:
+  requires: explicit_patient_consent_per_prescription
+  v1: not_supported
+identification:
+  patient_required: [name, age]
+  patient_one_of: [verified_phone, email]
+  doctor_display: [name, qualification, registration_number, council]
+  minors:
+    v1: not_supported
+    basis: product_decision
+records:
+  keep: [consult_log, call_or_video_metadata, prescription, consent_record, rule_evaluations]
+  video_recording: false
+  retention_rule: RET-02
+reasons:
+  RX_PROHIBITED:            { key: rx.block.prohibited,       en: "Synthetic: cannot be prescribed online." }
+  RX_PROHIBITED_IN_PRODUCT: { key: rx.block.prohibited_product, en: "Synthetic: cannot be prescribed in this app." }
+  RX_NOT_CLASSIFIED:        { key: rx.block.not_classified,   en: "Synthetic: not classified." }
+  RX_NEEDS_VIDEO_FIRST:     { key: rx.block.needs_video,      en: "Synthetic: video needed first." }
+  RX_DOCTOR_NOT_VERIFIED:   { key: rx.block.doctor_unverified, en: "Synthetic: doctor not verified." }
+  RX_IDENTITY_NOT_CONFIRMED: { key: rx.block.identity,        en: "Synthetic: confirm identity." }
+  RX_AGE_MISSING:           { key: rx.block.age,              en: "Synthetic: age required." }
+  RX_CONSENT_MISSING:       { key: rx.block.consent,          en: "Synthetic: consent missing." }
+  RX_DIAGNOSIS_MISSING:     { key: rx.block.diagnosis,        en: "Synthetic: diagnosis missing." }
+  RX_FOLLOW_UP_NOT_ESTABLISHED: { key: rx.block.follow_up,    en: "Synthetic: not a follow-up." }
+  RX_DOSE_INCOMPLETE:       { key: rx.block.dose,             en: "Synthetic: dose incomplete." }
+  RX_SIGNATURE_REQUIRED:    { key: rx.block.signature,        en: "Synthetic: confirm identity to sign." }
+  RX_ESIGN_REQUIRED:        { key: rx.block.esign,            en: "Synthetic: e-signature required." }
+  RX_PATIENT_OUTSIDE_INDIA: { key: rx.block.outside_india,    en: "Synthetic: patient outside the consult country." }

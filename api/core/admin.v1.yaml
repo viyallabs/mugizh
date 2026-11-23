@@ -1,0 +1,447 @@
+openapi: 3.1.0
+info:
+  title: Core API — admin (staff access and grievances)
+  version: 1.0.0
+  description: |
+    Just-in-time staff access (S-128, access-control-design §5) and the grievance queue
+    with its legal timers (S-142). Patients submit and track complaints. Staff operations
+    are declared with staff roles; staff sign-in is not built yet (decision D-21), so those
+    routes are unreachable until it is.
+tags:
+  - name: admin
+    description: Staff access, grievances
+paths:
+  /v1/me/grievances:
+    get:
+      operationId: listMyGrievances
+      tags: [admin]
+      summary: My complaints and their status
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Complaints
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GrievanceList' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createGrievance
+      tags: [admin]
+      summary: Make a complaint; the reference number is returned at once
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GrievanceCreate' }
+      responses:
+        '201':
+          description: Recorded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Grievance' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /admin/v1/account-lookups:
+    post:
+      operationId: lookupAccount
+      tags: [admin]
+      summary: Find an account by phone number for support triage, with no personal or health details
+      description: |
+        Support, ops and the Grievance Officer find the opaque account reference of a caller so they can raise a
+        just-in-time access request (S-172). The answer carries no name, date of birth, contact detail or health data.
+        A ticket reference is required; every lookup is audited, and lookups are limited per staff member (E-DP-16).
+        The phone number travels in the body, never in the URL, and is not stored.
+      x-roles: [support, ops, grievance_officer]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccountLookupRequest' }
+      responses:
+        '200':
+          description: The account summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountSummary' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+  /admin/v1/access-requests:
+    post:
+      operationId: requestStaffAccess
+      tags: [admin]
+      summary: Ask for just-in-time access to one patient's data
+      x-roles: [support, ops, grievance_officer, security_owner]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccessRequestCreate' }
+      responses:
+        '201':
+          description: Pending approval
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccessRequest' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /admin/v1/access-requests/{requestId}/approve:
+    post:
+      operationId: approveStaffAccess
+      tags: [admin]
+      summary: Approve a request (security owner, never the requester)
+      x-roles: [security_owner]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Approved; the grant exists
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccessRequest' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /admin/v1/access-requests/{requestId}/reject:
+    post:
+      operationId: rejectStaffAccess
+      tags: [admin]
+      summary: Reject a request
+      x-roles: [security_owner]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccessReject' }
+      responses:
+        '204': { description: Rejected }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /admin/v1/break-glass:
+    post:
+      operationId: breakGlassAccess
+      tags: [admin]
+      summary: Immediate access in a live security incident; alerts, justification due in 24 hours
+      x-roles: [security_owner]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccessRequestCreate' }
+      responses:
+        '201':
+          description: Access granted; alert raised
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccessRequest' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /admin/v1/access-reviews/{month}:
+    get:
+      operationId: monthlyAccessReview
+      tags: [admin]
+      summary: Staff access of one month with reasons (also records that the review was done)
+      x-roles: [security_owner]
+      x-ownership: none
+      parameters:
+        - name: month
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$' }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Review rows
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccessReviewList' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /admin/v1/grievances:
+    get:
+      operationId: listGrievanceQueue
+      tags: [admin]
+      summary: Open grievances, most urgent first
+      x-roles: [grievance_officer, support]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Queue
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GrievanceList' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /admin/v1/grievances/{grievanceId}/acknowledge:
+    post:
+      operationId: acknowledgeGrievance
+      tags: [admin]
+      summary: Acknowledge a grievance
+      x-roles: [grievance_officer, support]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/GrievanceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Acknowledged }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /admin/v1/grievances/{grievanceId}/resolve:
+    post:
+      operationId: resolveGrievance
+      tags: [admin]
+      summary: Resolve a grievance with an outcome code
+      x-roles: [grievance_officer]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/GrievanceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GrievanceResolve' }
+      responses:
+        '204': { description: Resolved }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /admin/v1/grievance-alerts:
+    get:
+      operationId: listGrievanceAlerts
+      tags: [admin]
+      summary: Timer alerts (10-day and 80% pre-alerts, overdue acknowledgements, breaches)
+      x-roles: [grievance_officer, security_owner]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Alerts
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AlertList' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, format: uuid }
+    RequestId:
+      name: requestId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    GrievanceId:
+      name: grievanceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string, maxLength: 200 }
+  responses:
+    Problem:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string }
+        detail: { type: string }
+        instance: { type: string }
+        traceId: { type: string }
+    GrievanceCreate:
+      type: object
+      additionalProperties: false
+      required: [text]
+      properties:
+        text: { type: string, minLength: 1, maxLength: 4000 }
+    GrievanceResolve:
+      type: object
+      additionalProperties: false
+      required: [outcome]
+      properties:
+        outcome: { type: string, pattern: '^[a-z_]{1,40}$' }
+    Grievance:
+      type: object
+      required: [grievanceId, reference, kind, status, receivedAt, ackDueAt, dueAt]
+      properties:
+        grievanceId: { type: string, format: uuid }
+        reference: { type: string }
+        kind: { type: string, enum: [complaint, content_takedown, order_takedown, intimate_image, lawful_request, medical_record_copy, data_rights, child_account], x-extensible-enum: true }
+        status: { type: string, enum: [open, acknowledged, resolved] }
+        receivedAt: { type: string, format: date-time }
+        ackDueAt: { type: string, format: date-time }
+        dueAt: { type: string, format: date-time }
+        acknowledgedAt: { type: string, format: date-time }
+        resolvedAt: { type: string, format: date-time }
+        outcome: { type: string }
+    GrievanceList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Grievance' }
+        nextCursor: { type: string }
+    AccountLookupRequest:
+      type: object
+      additionalProperties: false
+      required: [phone, ticketRef]
+      properties:
+        phone: { type: string, minLength: 6, maxLength: 20, pattern: '^\+[0-9]{6,19}$' }
+        ticketRef: { type: string, pattern: '^[A-Za-z0-9_-]{1,40}$' }
+    AccountSummary:
+      type: object
+      additionalProperties: false
+      required: [accountId, createdOn, roles, activeDevices]
+      properties:
+        accountId: { type: string, format: uuid }
+        createdOn: { type: string, format: date }
+        roles: { type: array, items: { type: string, maxLength: 30 } }
+        activeDevices: { type: integer, minimum: 0 }
+    AccessRequestCreate:
+      type: object
+      additionalProperties: false
+      required: [patientId, kinds, reasonCode, ticketRef, durationMinutes]
+      properties:
+        patientId: { type: string, format: uuid }
+        kinds:
+          type: array
+          minItems: 1
+          items: { type: string, enum: [booking, identity_basic, clinical_current, clinical_own, clinical_history, documents, payment] }
+        reasonCode: { type: string, enum: [complaint, rights_request, payment_dispute, security_incident, legal_order] }
+        ticketRef: { type: string, pattern: '^[A-Za-z0-9_-]{1,40}$' }
+        durationMinutes: { type: integer, minimum: 1, maximum: 240 }
+    AccessReject:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: { type: string, pattern: '^[a-z_]{1,40}$' }
+    AccessRequest:
+      type: object
+      required: [requestId, staffId, staffRole, patientId, kinds, reasonCode, ticketRef, durationMinutes, breakGlass, status, requestedAt]
+      properties:
+        requestId: { type: string, format: uuid }
+        staffId: { type: string, format: uuid }
+        staffRole: { type: string }
+        patientId: { type: string, format: uuid }
+        kinds:
+          type: array
+          items: { type: string }
+        reasonCode: { type: string }
+        ticketRef: { type: string }
+        durationMinutes: { type: integer }
+        breakGlass: { type: boolean }
+        status: { type: string, enum: [pending, approved, rejected, expired] }
+        requestedAt: { type: string, format: date-time }
+        decidedAt: { type: string, format: date-time }
+        approverId: { type: string, format: uuid }
+        grantId: { type: string, format: uuid }
+        grantExpiresAt: { type: string, format: date-time }
+        justificationDueAt: { type: string, format: date-time }
+    AccessReviewRow:
+      type: object
+      required: [requestId, requestedAt, staffId, staffRole, patientId, kinds, reasonCode, ticketRef, breakGlass, status, justified]
+      properties:
+        requestId: { type: string, format: uuid }
+        requestedAt: { type: string, format: date-time }
+        staffId: { type: string, format: uuid }
+        staffRole: { type: string }
+        patientId: { type: string, format: uuid }
+        kinds:
+          type: array
+          items: { type: string }
+        reasonCode: { type: string }
+        ticketRef: { type: string }
+        approverId: { type: string, format: uuid }
+        breakGlass: { type: boolean }
+        status: { type: string }
+        grantId: { type: string, format: uuid }
+        justified: { type: boolean }
+    AccessReviewList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AccessReviewRow' }
+        nextCursor: { type: string }
+    Alert:
+      type: object
+      required: [itemId, reference, reason, dueAt]
+      properties:
+        itemId: { type: string, format: uuid }
+        reference: { type: string }
+        kind: { type: string }
+        reason: { type: string, enum: [ack_overdue, alert_80_percent, alert_10_days, breached, justification_overdue] }
+        dueAt: { type: string, format: date-time }
+    AlertList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Alert' }
+        nextCursor: { type: string }

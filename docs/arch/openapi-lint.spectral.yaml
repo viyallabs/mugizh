@@ -2,7 +2,8 @@
 # Run: spectral lint --ruleset docs/arch/openapi-lint.spectral.yaml <spec>.yaml
 # Spectral works with any backend language. Move this file next to the specs when the repo is set up (S-090/S-092),
 # and run it in CI with the OpenAPI diff check (K-ARC-06).
-# NOTE: written without a local Spectral run. NOT VERIFIED until CI lints the fixtures in docs/arch/lint-fixtures/:
+# VERIFIED 2026-11-17 with Spectral 6.15.0 (tools/ci/spectral-fixtures.sh): list-cursor-pagination and timestamps-date-time were fixed in that run.
+# Fixture expectations (run in CI job `spectral`):
 #   valid.core-api.v1.yaml must produce 0 errors; invalid.core-api.v1.yaml must produce exactly the errors listed in its header;
 #   scheduler-core.invalid.v1.yaml must fail no-health-fields-in-scheduler. Until then S-038 stays In Testing.
 
@@ -119,16 +120,42 @@ rules:
   list-cursor-pagination:
     description: GET operations returning an items[] list declare limit and cursor.
     severity: error
-    given: "$.paths[*].get[?(@.responses && @.responses['200'] && @.responses['200'].content && @.responses['200'].content['application/json'] && @.responses['200'].content['application/json'].schema && @.responses['200'].content['application/json'].schema.properties && @.responses['200'].content['application/json'].schema.properties.items)]"
+    # Fixed 2026-11-17 (S-092 first Spectral run): the earlier given-filter was applied to the children of `get`
+    # and never matched. Now a JSON Schema if/then on the operation itself.
+    given: $.paths[*].get
     then:
-      field: parameters
       function: schema
       functionOptions:
         schema:
-          type: array
-          allOf:
-            - contains: { type: object, required: [name], properties: { name: { const: limit } } }
-            - contains: { type: object, required: [name], properties: { name: { const: cursor } } }
+          type: object
+          if:
+            required: [responses]
+            properties:
+              responses:
+                required: ["200"]
+                properties:
+                  "200":
+                    required: [content]
+                    properties:
+                      content:
+                        required: ["application/json"]
+                        properties:
+                          "application/json":
+                            required: [schema]
+                            properties:
+                              schema:
+                                required: [properties]
+                                properties:
+                                  properties:
+                                    required: [items]
+          then:
+            required: [parameters]
+            properties:
+              parameters:
+                type: array
+                allOf:
+                  - contains: { type: object, required: [name], properties: { name: { const: limit } } }
+                  - contains: { type: object, required: [name], properties: { name: { const: cursor } } }
 
   # §3 personal data never in URLs (K-DP-04)
   no-pii-in-query:
@@ -154,12 +181,16 @@ rules:
   timestamps-date-time:
     description: Properties ending in At are RFC 3339 date-time.
     severity: error
+    # Fixed 2026-11-17 (S-092 first Spectral run): a missing `format` was silently skipped by `enumeration`.
     given: "$..properties[?(@property.match(/At$/))]"
     then:
-      field: format
-      function: enumeration
+      function: schema
       functionOptions:
-        values: [date-time]
+        schema:
+          type: object
+          required: [format]
+          properties:
+            format: { const: date-time }
 
   # §10 scheduler-core holds no health data (K-ARC-02). Off by default; switched on for the scheduler spec below.
   no-health-fields-in-scheduler:

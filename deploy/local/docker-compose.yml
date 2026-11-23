@@ -1,0 +1,20 @@
+# Local stack (S-090). Synthetic data only. Not used for staging or production.
+name: mugizh-local
+services:
+  db:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_USER: owner
+      POSTGRES_PASSWORD_FILE: /run/secrets/owner_pw
+      POSTGRES_DB: mugizh
+    ports: ["127.0.0.1:55432:5432"]
+    volumes:
+      - mugizh-db:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./.secrets/owner_pw:/run/secrets/owner_pw:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U owner -d mugizh"]
+      interval: 2s
+      retries: 30
+volumes:
+  mugizh-db: {}

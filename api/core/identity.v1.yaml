@@ -1,0 +1,532 @@
+openapi: 3.1.0
+info:
+  title: Core API — identity
+  version: 1.0.0
+  description: |
+    Sign-in by SMS OTP with device binding (S-104), professional MFA (S-105), devices and
+    remote sign-out (S-115). API standards: docs/arch/api-standards.md. Every operation
+    declares x-roles (deny by default, K-SEC-04). "public" needs no sign-in;
+    "authenticated" is any signed-in caller. No personal data in URLs (K-DP-04).
+tags:
+  - name: identity
+    description: Accounts, sessions, devices, MFA
+paths:
+  /v1/auth/otp-challenges:
+    post:
+      operationId: requestOtp
+      tags: [identity]
+      summary: Send a sign-in code by SMS (template SMS-01)
+      x-roles: [public]
+      x-side-effect: message
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OtpRequest' }
+      responses:
+        '202':
+          description: Code sent (same answer whether or not an account exists)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OtpChallenge' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/auth/sessions:
+    post:
+      operationId: createSession
+      tags: [identity]
+      summary: Verify the code and sign in on this device (creates the account if new)
+      x-roles: [public]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SessionRequest' }
+      responses:
+        '201':
+          description: Signed in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionTokens' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+  /v1/auth/sessions/refresh:
+    post:
+      operationId: refreshSession
+      tags: [identity]
+      summary: Rotate tokens with a proof signed by the bound device key
+      x-roles: [public]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshRequest' }
+      responses:
+        '200':
+          description: New tokens
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionTokens' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /v1/auth/sessions/current/sign-out:
+    post:
+      operationId: signOut
+      tags: [identity]
+      summary: End this session
+      x-roles: [authenticated]
+      x-restricted-ok: true
+      x-mfa-exempt: true
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Signed out }
+        '401': { $ref: '#/components/responses/Problem' }
+  /v1/me:
+    get:
+      operationId: getMe
+      tags: [identity]
+      summary: Who am I (no personal data beyond IDs and roles)
+      x-roles: [authenticated]
+      x-restricted-ok: true
+      x-mfa-exempt: true
+      responses:
+        '200':
+          description: The caller
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /v1/me/devices:
+    get:
+      operationId: listDevices
+      tags: [identity]
+      summary: My signed-in devices (S-115)
+      x-roles: [authenticated]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Devices
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeviceList' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /v1/me/devices/{deviceId}/revoke:
+    post:
+      operationId: revokeDevice
+      tags: [identity]
+      summary: Sign a lost device out (TC-07)
+      x-roles: [authenticated]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Revoked }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/me/devices/{deviceId}/approve:
+    post:
+      operationId: approveDevice
+      tags: [identity]
+      summary: Approve a new device from an already verified one (E-DP-22)
+      x-roles: [authenticated]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Approved }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/me/devices/current/push-token:
+    post:
+      operationId: setPushToken
+      tags: [identity]
+      summary: Register or replace this device's push token
+      x-roles: [authenticated]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PushToken' }
+      responses:
+        '204': { description: Stored }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /v1/auth/mfa/totp:
+    post:
+      operationId: enrolTotp
+      tags: [identity]
+      summary: Start authenticator set-up (professionals)
+      x-roles: [doctor, clinic_admin, front_desk]
+      x-mfa-exempt: true
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Secret shown once
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TotpEnrolment' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/auth/mfa/totp/confirm:
+    post:
+      operationId: confirmTotp
+      tags: [identity]
+      summary: Confirm set-up with a first code
+      x-roles: [doctor, clinic_admin, front_desk]
+      x-mfa-exempt: true
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TotpCode' }
+      responses:
+        '204': { description: Confirmed; MFA complete for this session }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/auth/mfa/verify:
+    post:
+      operationId: verifyMfa
+      tags: [identity]
+      summary: Complete MFA for this session
+      x-roles: [doctor, clinic_admin, front_desk]
+      x-mfa-exempt: true
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TotpCode' }
+      responses:
+        '204': { description: MFA complete }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/auth/step-up:
+    post:
+      operationId: stepUp
+      tags: [identity]
+      summary: Re-authenticate before signing or other sensitive actions (P08)
+      x-roles: [doctor, clinic_admin, front_desk]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TotpCode' }
+      responses:
+        '204': { description: Step-up valid for 5 minutes }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/auth/step-up/otp-challenges:
+    post:
+      operationId: requestStepUpOtp
+      tags: [identity]
+      summary: Send a step-up code to the phone on file (patients; template SMS-01)
+      description: |
+        Patients re-authenticate with a one-time code sent by SMS to the number on their
+        account (never to a number in the request) before export, erasure, undoing an
+        erasure or downloading an export (data-rights-flows.md; TM-32, TM-33). The code is
+        bound to this session. Same limits and lockout as sign-in codes (TM-01, TM-02).
+        A session on a device that is not yet re-verified is refused.
+      x-roles: [patient]
+      x-side-effect: message
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      responses:
+        '202':
+          description: Code sent to the phone on file
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OtpChallenge' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/auth/step-up/otp:
+    post:
+      operationId: verifyStepUpOtp
+      tags: [identity]
+      summary: Verify the step-up code (patients); valid for 5 minutes
+      x-roles: [patient]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StepUpOtp' }
+      responses:
+        '204': { description: Step-up valid for 5 minutes }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+  /v1/me/profile:
+    get:
+      operationId: getProfile
+      tags: [identity]
+      summary: My profile (name, date of birth, sex, language, blood group, allergies, emergency contact)
+      x-roles: [patient]
+      x-ownership: self
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Profile' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    put:
+      operationId: putProfile
+      tags: [identity]
+      summary: Create or replace my profile (adults only; no identity numbers in text)
+      description: |
+        Refused with identity.profile_underage when the date of birth is under the country
+        pack's minimum account age (K-DP-10), and with identity.profile_prohibited_identifier
+        when free text holds an identity number (K-DP-05). All fields are sealed with the
+        patient key at rest (K-DP-03).
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Profile' }
+      responses:
+        '204': { description: Saved }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, format: uuid }
+    IdempotencyKeyRequired:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+    DeviceId:
+      name: deviceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string, maxLength: 200 }
+  responses:
+    Problem:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string }
+        detail: { type: string }
+        instance: { type: string }
+        traceId: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, code]
+            properties:
+              field: { type: string }
+              code: { type: string }
+    AppKind:
+      type: string
+      enum: [patient, pro]
+    OtpRequest:
+      type: object
+      additionalProperties: false
+      required: [phone, app]
+      properties:
+        phone: { type: string, description: E.164, maxLength: 20 }
+        app: { $ref: '#/components/schemas/AppKind' }
+    OtpChallenge:
+      type: object
+      required: [challengeId, expiresAt]
+      properties:
+        challengeId: { type: string, format: uuid }
+        expiresAt: { type: string, format: date-time }
+    DeviceKey:
+      type: object
+      additionalProperties: false
+      required: [publicKey, platform, proof]
+      properties:
+        publicKey: { type: string, format: byte, description: DER SubjectPublicKeyInfo of an ECDSA P-256 key, base64 }
+        platform: { type: string, enum: [android, ios, web] }
+        proof: { type: string, format: byte, description: "ECDSA P-256 signature (ASN.1, SHA-256) over mugizh-signin|v1|<challengeId>, base64" }
+    SessionRequest:
+      type: object
+      additionalProperties: false
+      required: [challengeId, phone, code, app, device]
+      properties:
+        challengeId: { type: string, format: uuid }
+        phone: { type: string, maxLength: 20 }
+        code: { type: string, pattern: '^[0-9]{6}$' }
+        app: { $ref: '#/components/schemas/AppKind' }
+        proIntent: { type: string, enum: [doctor] }
+        device: { $ref: '#/components/schemas/DeviceKey' }
+    RefreshRequest:
+      type: object
+      additionalProperties: false
+      required: [refreshToken, timestamp, signature]
+      properties:
+        refreshToken: { type: string, maxLength: 80 }
+        timestamp: { type: integer, format: int64, description: Unix seconds signed by the device }
+        signature: { type: string, format: byte, description: ASN.1 ECDSA signature, base64 }
+    SessionTokens:
+      type: object
+      required: [userId, sessionId, deviceId, accessToken, accessExpiresAt, refreshToken, refreshExpiresAt, restricted, mfaRequired]
+      properties:
+        userId: { type: string, format: uuid }
+        sessionId: { type: string, format: uuid }
+        deviceId: { type: string, format: uuid }
+        accessToken: { type: string }
+        accessExpiresAt: { type: string, format: date-time }
+        refreshToken: { type: string }
+        refreshExpiresAt: { type: string, format: date-time }
+        restricted: { type: boolean }
+        mfaRequired: { type: boolean }
+        newAccount: { type: boolean }
+    RoleGrant:
+      type: object
+      required: [role]
+      properties:
+        role: { type: string }
+        clinicId: { type: string, format: uuid }
+    BloodGroup:
+      type: string
+      enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', unknown]
+    EmergencyContact:
+      type: object
+      additionalProperties: false
+      required: [name, phone]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        phone: { type: string, maxLength: 20 }
+    Profile:
+      type: object
+      additionalProperties: false
+      required: [fullName, dateOfBirth, sex]
+      properties:
+        fullName: { type: string, minLength: 1, maxLength: 120 }
+        dateOfBirth: { type: string, format: date }
+        sex: { type: string, enum: [female, male, other] }
+        preferredLanguage: { type: string, maxLength: 20 }
+        bloodGroup: { $ref: '#/components/schemas/BloodGroup' }
+        allergies:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 100 }
+        emergencyContact: { $ref: '#/components/schemas/EmergencyContact' }
+    Me:
+      type: object
+      required: [userId, app, roles, restricted, mfaComplete]
+      properties:
+        userId: { type: string, format: uuid }
+        app: { $ref: '#/components/schemas/AppKind' }
+        roles:
+          type: array
+          items: { $ref: '#/components/schemas/RoleGrant' }
+        restricted: { type: boolean }
+        mfaComplete: { type: boolean }
+    Device:
+      type: object
+      required: [deviceId, platform, app, status, boundAt, lastSeenAt, current]
+      properties:
+        deviceId: { type: string, format: uuid }
+        platform: { type: string }
+        app: { type: string }
+        status: { type: string, enum: [pending_reverification, active], x-extensible-enum: true }
+        boundAt: { type: string, format: date-time }
+        lastSeenAt: { type: string, format: date-time }
+        current: { type: boolean }
+    DeviceList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Device' }
+        nextCursor: { type: string }
+    TotpEnrolment:
+      type: object
+      required: [factorId, secret, uri]
+      properties:
+        factorId: { type: string, format: uuid }
+        secret: { type: string }
+        uri: { type: string }
+    PushToken:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token: { type: string, minLength: 20, maxLength: 4096 }
+    TotpCode:
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code: { type: string, pattern: '^[0-9]{6}$' }
+    StepUpOtp:
+      type: object
+      additionalProperties: false
+      required: [challengeId, code]
+      properties:
+        challengeId: { type: string, format: uuid }
+        code: { type: string, pattern: '^[0-9]{6}$' }

@@ -14,7 +14,7 @@
 | Planning documents | 93 files in the repo: vision, requirements, scope, metrics, architecture (overview, modules, adapters, API standards, country pack, FHIR, infra), security (12 designs), privacy, legal, clinical rules, payments, design IA, test catalogue (TC-01 to TC-66) |
 | `CLAUDE.md`, `/contracts` (8 files), PR template, `CODEOWNERS` | Exist. Contracts are **DRAFT** (formal review is S-085) but bind Claude |
 | Code | **None.** No source files, no `.gitignore`, `README.md` is still the GitLab template |
-| Tech stack | **Core stack decided 2026-11-16** (Go, React Native, Next.js, PostgreSQL + PostGIS; OCI for dev, AWS for staging, production and DR). **Still open:** Go framework, queue, monorepo, test tools, CI tool, identity service (ADR-03, 07, 10, 11, 24, 25: my proposals await your confirmation). The Architecture sheet still shows all ADR rows as "Proposed", and **`CLAUDE.md` §4 still says the stack is undecided** |
+| Tech stack | **Decided and confirmed 2026-11-16** (adr-decisions §6.7): Go (chi, oapi-codegen, pgx + sqlc), River queue on PostgreSQL, React Native (Expo prebuild), Next.js, PostgreSQL + PostGIS, Ory Kratos (self-hosted), GitLab CI, OpenTofu, go.work + pnpm; OCI dev, AWS staging/prod/DR. `CLAUDE.md` §4 updated. **Still yours:** the Oracle reading and the two-cloud cost |
 | Sprint 0 (P10) | **13 of 13 stories in Backlog** (S-090 to S-103) |
 | Stories awaiting founder sign-off | About 40 are "In Testing" (drafted, not signed): most of P01, P04, P05, P06 |
 | Not started | P02 concierge test (S-014, S-024, S-025, S-082), vendor spikes (S-039 to S-042), prototypes (S-066 to S-068), most of P09 design, S-009 lawyer, S-007 company basics |
@@ -55,11 +55,11 @@ Source: [adr-decisions.md](../arch/adr-decisions.md) §5 and §6. **CLAUDE.md §
 - [x] **Database** (ADR-06): **decided**: PostgreSQL + PostGIS.
 - [x] **Cloud** (ADR-09): **decided**: dev on Oracle Cloud (OCI); staging, production and DR on AWS India regions. **[VALIDATE region names and OCI service availability.]**
 - [ ] **Confirm my Oracle reading:** OCI for dev, and **no Oracle Database** in the application (you answered both "OCI and Oracle Database" and "PostgreSQL").
-- [ ] **Confirm the Go proposals** (ADR-03 chi + OpenAPI-first + pgx/sqlc; ADR-07 PostgreSQL-backed queue; ADR-24 plain monorepo; ADR-25 test tools). Expo or bare React Native.
-- [ ] **CI/CD** (ADR-10): the repo is on **GitLab** (`gitlab.com/viyallabs/mugizh`), so GitLab CI is proposed; confirm.
-- [ ] **Identity service** (ADR-11): still open; a portable self-hosted option suits a two-cloud setup.
+- [x] **Confirm the Go proposals** (confirmed 2026-11-16, adr-decisions §6.7; Expo prebuild chosen) (ADR-03 chi + OpenAPI-first + pgx/sqlc; ADR-07 PostgreSQL-backed queue; ADR-24 plain monorepo; ADR-25 test tools). Expo or bare React Native.
+- [x] **CI/CD** (ADR-10): GitLab CI + OpenTofu, confirmed 2026-11-16. The repo is on **GitLab** (`gitlab.com/viyallabs/mugizh`), so GitLab CI is proposed; confirm.
+- [x] **Identity service** (ADR-11): **Ory Kratos, self-hosted**, confirmed 2026-11-16; spike in S-104/S-105 (fallback Keycloak).
 - [ ] **Accept the two-cloud cost** (or move dev to AWS): see adr-decisions §6.3.
-- [ ] **Approve the CLAUDE.md §4 change** (proposed text in adr-decisions §6.5). Until then CLAUDE.md still says the stack is undecided.
+- [x] **CLAUDE.md §4 updated** with the confirmed stack (2026-11-16).
 - [ ] Update the Architecture sheet ADR rows (status, "Decided on"; add ADR-30, 31).
 - [ ] **Accept the 15 stack-independent ADRs** (ADR-01, 08, 12 to 23, 26), including the five "accept with change".
 - [ ] **ADR-21 log retention:** 180 days (contract text today) or 1 year (proposed). Choosing 1 year means changing K-SEC-01, S-059 and S-095 through an ADR.

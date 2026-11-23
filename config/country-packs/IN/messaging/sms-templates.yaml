@@ -1,0 +1,99 @@
+# India SMS template registry (DRAFT). Source: docs/messaging/messaging-compliance-plan.md section 4.
+# K-MSG-01: SMS is sent only through registered DLT templates with typed variables.
+# The adapter adds the Principal Entity ID, header and template ID; the DLT template IDs
+# are filled in after registration (S-102). [FILL]
+# Variable types: numeric (N) or alphanumeric (A). Contact numbers and links are fixed text, never variables.
+# SMS-16 (SOS alert to a non-user emergency contact, v1.1) is not defined: its category is open [VALIDATE].
+version: 0.1.0-draft
+status: draft
+templates:
+  - id: SMS-01
+    category: service_implicit_authentication
+    purpose: Sign-in OTP
+    text: "{#var#} is your [Product] sign-in code. It expires in 5 minutes. Do not share it with anyone. -[Product]"
+    variables: [{ name: otp, type: numeric }]
+  - id: SMS-02
+    category: service_implicit
+    purpose: Booking confirmed
+    text: "Your appointment with {#var#} is confirmed for {#var#}. Manage it in the [Product] app. -[Product]"
+    variables: [{ name: doctor_name, type: alphanumeric }, { name: date_time, type: alphanumeric }]
+  - id: SMS-03
+    category: service_implicit
+    purpose: Appointment reminder (24 hours and 2 hours before)
+    text: "Reminder: your appointment with {#var#} is at {#var#}. -[Product]"
+    variables: [{ name: doctor_name, type: alphanumeric }, { name: date_time, type: alphanumeric }]
+  - id: SMS-04
+    category: service_implicit
+    purpose: Online consult starting
+    text: "Your online consultation with {#var#} starts at {#var#}. Open the [Product] app to join. -[Product]"
+    variables: [{ name: doctor_name, type: alphanumeric }, { name: date_time, type: alphanumeric }]
+  - id: SMS-05
+    category: service_implicit
+    purpose: Clinic or doctor cancelled
+    text: "Sorry, your appointment on {#var#} was cancelled by the clinic. A full refund has started. Reschedule in the app. -[Product]"
+    variables: [{ name: date_time, type: alphanumeric }]
+  - id: SMS-06
+    category: service_implicit
+    purpose: Doctor did not join
+    text: "Your doctor could not join the consultation on {#var#}. A full refund of Rs {#var#} has started. -[Product]"
+    variables: [{ name: date_time, type: alphanumeric }, { name: amount, type: numeric }]
+  - id: SMS-07
+    category: service_implicit
+    purpose: Refund started
+    text: "Your refund of Rs {#var#} (ref {#var#}) has started. Banks usually take 5-7 working days. Track it in the [Product] app. -[Product]"
+    variables: [{ name: amount, type: numeric }, { name: reference, type: alphanumeric }]
+  - id: SMS-07b
+    category: service_implicit
+    purpose: Refund reached the bank
+    text: "Your refund of Rs {#var#} (ref {#var#}) has been sent to your bank. -[Product]"
+    variables: [{ name: amount, type: numeric }, { name: reference, type: alphanumeric }]
+  - id: SMS-07c
+    category: service_implicit
+    purpose: Refund delayed
+    text: "Your refund of Rs {#var#} (ref {#var#}) is delayed. We are working on it; see the [Product] app for help. -[Product]"
+    variables: [{ name: amount, type: numeric }, { name: reference, type: alphanumeric }]
+  - id: SMS-08
+    category: service_implicit
+    purpose: Payment failed, money returned
+    text: "Your payment of Rs {#var#} did not complete a booking. It will be returned automatically. Ref {#var#}. -[Product]"
+    variables: [{ name: amount, type: numeric }, { name: reference, type: alphanumeric }]
+  - id: SMS-09
+    category: service_implicit
+    purpose: Prescription ready
+    text: "Your doctor has shared a new prescription. Open the [Product] app to view it. -[Product]"
+    variables: []
+  - id: SMS-10
+    category: service_implicit
+    purpose: Medicine reminder (discreet; fallback when push fails)
+    text: "It is time for your {#var#} medicine. Open the app to mark it taken. -[Product]"
+    variables: [{ name: time_of_day, type: alphanumeric }]
+  - id: SMS-10-N
+    category: service_implicit
+    purpose: Medicine reminder with name (P-MEDNAMES only)
+    text: "Time to take {#var#}. Open the app to mark it taken. -[Product]"
+    variables: [{ name: medicine_name, type: alphanumeric }]
+  - id: SMS-11
+    category: service_implicit
+    purpose: Test or follow-up due (discreet)
+    text: "You have a health task due on {#var#}. Open the [Product] app for details. -[Product]"
+    variables: [{ name: date_time, type: alphanumeric }]
+  - id: SMS-12
+    category: service_implicit
+    purpose: Grievance acknowledgement
+    text: "We received your complaint, ref {#var#}. We will reply by {#var#}. -[Product]"
+    variables: [{ name: reference, type: alphanumeric }, { name: date_time, type: alphanumeric }]
+  - id: SMS-13
+    category: service_implicit
+    purpose: Data request done (access, correction or erasure)
+    text: "Your request ref {#var#} is complete. Details are in the app or your email. -[Product]"
+    variables: [{ name: reference, type: alphanumeric }]
+  - id: SMS-14
+    category: service_implicit
+    purpose: Security notice (new device sign-in, or number re-verification)
+    text: "A new sign-in to your [Product] account happened on {#var#}. If this was not you, contact us at [support number, fixed and whitelisted]. -[Product]"
+    variables: [{ name: date_time, type: alphanumeric }]
+  - id: SMS-15
+    category: service_implicit
+    purpose: Breach notice (runbook template C, short form)
+    text: "Important: a security incident may have affected your [Product] account. Details are in the app and your email. Questions: [support number, fixed and whitelisted]. -[Product]"
+    variables: []

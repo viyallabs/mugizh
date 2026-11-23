@@ -97,7 +97,7 @@ This is a **healthcare app for India**: patients find verified doctors, book and
 | **Prescription reminders are opt-in (P-REMIND).** Once on, each item gets reminders that can be switched off. | consent-texts.md |
 | **Doctor access tiers T1 to T4.** No "all patients" directory. | consent-texts.md A2 |
 | **Nurses are reserved for v4.0.** The role exists; no accounts. | S-031 option A |
-| **The tech stack is NOT decided** (ADR-02 to ADR-07, ADR-09 to ADR-11, ADR-24, ADR-25 are open). **Do not choose a language, framework or cloud.** Code stories wait for the founder's decision. | adr-decisions.md |
+| **Tech stack (decided 2026-11-16):** backend, workers and scheduler-core in **Go** (`net/http` + chi, OpenAPI-first with oapi-codegen, pgx + sqlc, slog, OpenTelemetry); queue **River** on PostgreSQL (must pass S-068); mobile **React Native with Expo prebuild** (two apps), web **Next.js**; TypeScript clients generated from OpenAPI (openapi-typescript); database **PostgreSQL + PostGIS**; identity **Ory Kratos, self-hosted** (spike in S-104/S-105); repo **go.work + pnpm + Taskfile**; CI **GitLab CI**; IaC **OpenTofu**; tests: Go testing + testcontainers, Playwright, Maestro, k6, ZAP, govulncheck, gosec, Semgrep, Gitleaks, Trivy. **Dev on Oracle Cloud (OCI), synthetic data only; staging, production and DR on AWS India regions.** Follow the dual-cloud rules (no cloud SDK in app code; `keys` interface; S3-compatible storage; same images and PostgreSQL version). **Do not add a framework, library family, queue, cloud service or vendor beyond this without an ADR.** | adr-decisions.md §6 |
 | Telemedicine rules **v1.1.0-draft**. Not approved until the doctor and lawyer review it. | docs/clinical/ |
 
 ## 5. Never do these

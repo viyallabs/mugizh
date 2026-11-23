@@ -1,0 +1,349 @@
+openapi: 3.1.0
+info:
+  title: Core API — consult (online consultation sessions)
+  version: 1.0.0
+  description: |
+    Online consultation sessions (S-135 pre-join, S-136 join, S-137 connection and rejoin,
+    S-147 identity confirmation, S-148 outcomes). One session exists per confirmed video or
+    audio appointment. Telemedicine Practice Guidelines 2020 conditions built in: consent per
+    consultation (TELE-CONSENT, with the patient's "I am in India now" declaration, P10),
+    patient identification by the doctor before the composer opens (P02), mode recorded so the
+    mode at signing is known (E-RX-06). The call is never recorded (ADR-13). A dropped call is
+    never completed automatically (TC-32). Other people's consults answer 404 (K-SEC-04).
+    Join tokens are returned to the participant they were issued for and are never stored.
+tags:
+  - name: consult
+    description: Consult sessions, join, outcomes
+paths:
+  /v1/appointments/{appointmentId}/consult:
+    get:
+      operationId: getConsultByAppointment
+      tags: [consult]
+      summary: The consult session of one of my online appointments
+      x-roles: [patient, doctor]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+      responses:
+        '200':
+          description: The session
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConsultSession' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/consults/{consultId}:
+    get:
+      operationId: getConsult
+      tags: [consult]
+      summary: A consult session (the doctor also sees the patient's name and age, for identification)
+      x-roles: [patient, doctor]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/ConsultId'
+      responses:
+        '200':
+          description: The session
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConsultSession' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/consults/{consultId}/pre-join:
+    post:
+      operationId: preJoinConsult
+      tags: [consult]
+      summary: Record the device check and the teleconsultation consent for this consult
+      description: |
+        The consent text is TELE-CONSENT at the version in force. The patient must declare
+        "I am in India now" (P10): without it the answer is 403 consult.patient_location_not_allowed
+        (RX_PATIENT_OUTSIDE_INDIA) and the consult cannot start (TC-24). A failed device check
+        is refused with 422 consult.device_check_failed unless the patient accepts an audio call.
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/ConsultId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PreJoinRequest' }
+      responses:
+        '200':
+          description: Recorded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConsultSession' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /v1/consults/{consultId}/join:
+    post:
+      operationId: joinConsult
+      tags: [consult]
+      summary: Get a short-lived join token for the room (only within the window around the slot)
+      description: |
+        Patients need the pre-join consent and the in-India declaration. Doctors must still be
+        Verified (K-CS-01). The token is bound to the room and to the caller only. Calling again
+        after a dropped connection issues a new token (rejoin, TC-32).
+      x-roles: [patient, doctor]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/ConsultId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Token issued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JoinToken' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/consults/{consultId}/mode-changes:
+    post:
+      operationId: changeConsultMode
+      tags: [consult]
+      summary: Record that the call dropped from video to audio
+      x-roles: [patient, doctor]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/ConsultId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModeChangeRequest' }
+      responses:
+        '200':
+          description: Recorded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConsultSession' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/consults/{consultId}/identity-confirmation:
+    post:
+      operationId: confirmConsultIdentity
+      tags: [consult]
+      summary: The doctor confirms the patient's name and age (P02); the composer opens only after this
+      x-roles: [doctor]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/ConsultId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IdentityConfirmation' }
+      responses:
+        '200':
+          description: Confirmed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConsultSession' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/consults/{consultId}/outcome:
+    post:
+      operationId: setConsultOutcome
+      tags: [consult]
+      summary: End the consult with an outcome
+      description: |
+        completed needs both sides to have connected (E-BK-08, TC-27) and the identity
+        confirmation (P02); under the minimum duration it is flagged. converted_in_person
+        records the mode change (TC-33). patient_no_show needs the doctor present and the
+        patient absent after the grace period. technical_failure may also be set by the patient.
+      x-roles: [doctor, patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/ConsultId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OutcomeRequest' }
+      responses:
+        '200':
+          description: Ended
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConsultSession' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/consults/{consultId}/minor-discovered:
+    post:
+      operationId: reportConsultMinor
+      tags: [consult]
+      summary: The doctor finds the patient is a minor; the consult stops and the account is flagged (TC-48)
+      x-roles: [doctor]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/ConsultId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Stopped and flagged
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConsultSession' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, format: uuid }
+    AppointmentId:
+      name: appointmentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ConsultId:
+      name: consultId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    Problem:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string }
+        detail: { type: string }
+        instance: { type: string }
+        traceId: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, code]
+            properties:
+              field: { type: string }
+              code: { type: string }
+    CallMode:
+      type: string
+      enum: [video, audio, in_person]
+    ConsultState:
+      type: string
+      enum: [scheduled, open, both_connected, ended, failed_technical, no_show, cancelled]
+    ConsultOutcome:
+      type: string
+      enum: [completed, converted_in_person, patient_no_show, doctor_no_show, technical_failure, minor_stopped]
+    PatientIdentity:
+      type: object
+      required: [fullName, ageYears]
+      properties:
+        fullName: { type: string }
+        ageYears: { type: integer }
+    ConsultSession:
+      type: object
+      required: [consultId, appointmentId, bookedMode, currentMode, state, slotStart, slotEnd, joinOpensAt, joinClosesAt, consentRecorded, patientInIndiaDeclared, identityConfirmed]
+      properties:
+        consultId: { type: string, format: uuid }
+        appointmentId: { type: string, format: uuid }
+        bookedMode: { type: string, enum: [video, audio] }
+        currentMode: { $ref: '#/components/schemas/CallMode' }
+        state: { $ref: '#/components/schemas/ConsultState' }
+        slotStart: { type: string, format: date-time }
+        slotEnd: { type: string, format: date-time }
+        joinOpensAt: { type: string, format: date-time }
+        joinClosesAt: { type: string, format: date-time }
+        consentRecorded: { type: boolean }
+        patientInIndiaDeclared: { type: boolean }
+        identityConfirmed: { type: boolean }
+        bothConnectedAt: { type: [string, 'null'], format: date-time }
+        endedAt: { type: [string, 'null'], format: date-time }
+        outcome: { $ref: '#/components/schemas/ConsultOutcome' }
+        shortCall: { type: boolean }
+        patient:
+          description: Set for the doctor only, and only when records allows the read (K-DP-02)
+          $ref: '#/components/schemas/PatientIdentity'
+    DeviceCheck:
+      type: object
+      additionalProperties: false
+      required: [cameraOk, microphoneOk, networkOk]
+      properties:
+        cameraOk: { type: boolean }
+        microphoneOk: { type: boolean }
+        networkOk: { type: boolean }
+    ConsentAcceptance:
+      type: object
+      additionalProperties: false
+      required: [textId, textVersion, inIndiaNow]
+      properties:
+        textId: { type: string, maxLength: 40 }
+        textVersion: { type: integer, minimum: 1 }
+        inIndiaNow: { type: boolean }
+    PreJoinRequest:
+      type: object
+      additionalProperties: false
+      required: [deviceCheck, consent]
+      properties:
+        deviceCheck: { $ref: '#/components/schemas/DeviceCheck' }
+        consent: { $ref: '#/components/schemas/ConsentAcceptance' }
+        acceptAudioFallback: { type: boolean }
+    JoinToken:
+      type: object
+      required: [consultId, mode, token, tokenExpiresAt, state]
+      properties:
+        consultId: { type: string, format: uuid }
+        mode: { $ref: '#/components/schemas/CallMode' }
+        token: { type: string }
+        tokenExpiresAt: { type: string, format: date-time }
+        state: { $ref: '#/components/schemas/ConsultState' }
+    ModeChangeRequest:
+      type: object
+      additionalProperties: false
+      required: [mode, reason]
+      properties:
+        mode: { type: string, enum: [audio] }
+        reason: { type: string, enum: [network, device, user_choice] }
+    IdentityConfirmation:
+      type: object
+      additionalProperties: false
+      required: [nameConfirmed, ageConfirmed]
+      properties:
+        nameConfirmed: { type: boolean }
+        ageConfirmed: { type: boolean }
+    OutcomeRequest:
+      type: object
+      additionalProperties: false
+      required: [outcome]
+      properties:
+        outcome:
+          type: string
+          enum: [completed, converted_in_person, patient_no_show, technical_failure]

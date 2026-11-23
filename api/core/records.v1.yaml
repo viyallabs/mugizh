@@ -1,0 +1,782 @@
+openapi: 3.1.0
+info:
+  title: Core API — records (consent and sharing)
+  version: 1.0.0
+  description: |
+    Itemised purpose consent (S-107) and the patient's view of who may see their record
+    (tiers T1 to T4, S-168). Consent texts are versioned; a grant must name the version in
+    force (consent-design §6). Withdrawing a needed purpose is done by closing the account.
+tags:
+  - name: records
+    description: Consent, permissions, access log
+paths:
+  /v1/me/consents:
+    get:
+      operationId: listConsents
+      tags: [records]
+      summary: My current consent choices
+      description: Patients see their P-* purposes; doctors, clinic admins and front desk staff their D-* purposes (provider notice, S-275).
+      x-roles: [patient, doctor, clinic_admin, front_desk]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Consents
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConsentList' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: grantConsent
+      tags: [records]
+      summary: Give consent for one purpose (the text version shown)
+      description: |
+        Patients consent to P-* purposes; doctors, clinic admins and front desk staff to D-* purposes. The
+        notice version must be the one in force for the purpose (patient or provider notice); 403 for a purpose
+        the acting role does not own.
+      x-roles: [patient, doctor, clinic_admin, front_desk]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConsentGrant' }
+      responses:
+        '204': { description: Recorded }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /v1/me/consents/{purposeId}/withdraw:
+    post:
+      operationId: withdrawConsent
+      tags: [records]
+      summary: Withdraw an optional purpose; takes effect immediately
+      x-roles: [patient, doctor, clinic_admin, front_desk]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/PurposeId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Withdrawn }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/me/access-grants:
+    get:
+      operationId: listAccessGrants
+      tags: [records]
+      summary: Who can see my record, and until when
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Grants
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GrantList' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /v1/me/access-grants/{grantId}/revoke:
+    post:
+      operationId: revokeAccessGrant
+      tags: [records]
+      summary: Stop sharing (T3 and T4 only; T1 and T2 are kept by law)
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/GrantId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Revoked; the doctor's next request is denied }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/me/history-shares:
+    post:
+      operationId: createHistoryShare
+      tags: [records]
+      summary: Share my history with one verified doctor for one confirmed appointment (P-SHARE screen)
+      description: |
+        Records the P-SHARE consent for the text version shown (it must be the version in force) and gives
+        the doctor read access (tier T3) until the default end (7 days after the appointment, from
+        configuration) or an earlier time the patient chooses. Repeating the request while that share is
+        active returns the same share. 404 for an appointment that is not the caller's confirmed appointment
+        with that doctor. 403 records.doctor_not_verified if the doctor is not Verified now.
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HistoryShareCreate' }
+      responses:
+        '201':
+          description: The share
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HistoryShare' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/me/access-extension-requests:
+    get:
+      operationId: listAccessExtensionRequests
+      tags: [records]
+      summary: Doctors who asked for more time on my shared history, waiting for my answer
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Open requests
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExtensionRequestList' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/me/access-extension-requests/{requestId}/approve:
+    post:
+      operationId: approveAccessExtension
+      tags: [records]
+      summary: Allow the doctor more time (tier T4). Only this answer gives access
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExtensionApprove' }
+      responses:
+        '201':
+          description: The extension
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HistoryShare' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/me/access-extension-requests/{requestId}/decline:
+    post:
+      operationId: declineAccessExtension
+      tags: [records]
+      summary: Say no to a doctor's request for more time
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Declined; no access was created }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/patients/{patientId}/access-extension-requests:
+    post:
+      operationId: requestAccessExtension
+      tags: [records]
+      summary: Ask the patient for more time on a shared history that is ending or has ended
+      description: |
+        Gives no access; only the patient's approval does. Allowed only for a Verified doctor who holds a
+        share the patient has not stopped, within the warning time before it ends or after it ended.
+        404 for a patient the doctor has no relationship with; 409 records.extension_not_allowed otherwise.
+        Asking again while a request is open returns the same request.
+      x-roles: [doctor]
+      x-ownership: practice
+      parameters:
+        - $ref: '#/components/parameters/PatientId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Sent to the patient
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExtensionRequestStatus' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/patients/{patientId}/documents:
+    get:
+      operationId: listPatientDocuments
+      tags: [records]
+      summary: The documents the patient uploaded, for a doctor with an active history share
+      description: |
+        Goes through the records gate and is audited. 403 consent.required when the share has ended or was
+        revoked (the app shows "ask for access"); 404 when the doctor has no relationship with the patient.
+        Titles only; a file is opened with a single-use link (issueDocumentLink).
+      x-roles: [doctor]
+      x-ownership: practice
+      parameters:
+        - $ref: '#/components/parameters/PatientId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Documents
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SharedDocumentList' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/me/rights-requests:
+    get:
+      operationId: listRightsRequests
+      tags: [records]
+      summary: My data-rights requests and their status
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Requests
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RightsRequestList' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createRightsRequest
+      tags: [records]
+      summary: See my data, ask for a correction or name a nominee (data-rights-flows §2)
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RightsRequestCreate' }
+      responses:
+        '202':
+          description: Accepted. Poll the request for its status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RightsRequest' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/me/rights-requests/{requestId}:
+    get:
+      operationId: getRightsRequest
+      tags: [records]
+      summary: Status of one request, with the erasure report once known
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RightsRequest' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/me/rights-requests/{requestId}/export-link:
+    post:
+      operationId: issueExportLink
+      tags: [records]
+      summary: Get a single-use link to download my finished export
+      x-roles: [patient]
+      x-ownership: self
+      x-step-up: true
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Link
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FileLink' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '410': { $ref: '#/components/responses/Problem' }
+  /v1/me/data-exports:
+    post:
+      operationId: requestDataExport
+      tags: [records]
+      summary: Ask for a full copy of my records (needs a fresh step-up)
+      x-roles: [patient]
+      x-ownership: self
+      x-step-up: true
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Accepted. Poll the request; when completed, ask for the link.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RightsRequest' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/me/account-erasure:
+    post:
+      operationId: requestAccountErasure
+      tags: [records]
+      summary: Close my account and erase my data (step 1 at once; needs a fresh step-up)
+      x-roles: [patient]
+      x-ownership: self
+      x-step-up: true
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Accepted. Data is hidden now; you can undo until undoUntil.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RightsRequest' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/me/account-erasure/{requestId}/undo:
+    post:
+      operationId: undoAccountErasure
+      tags: [records]
+      summary: Undo an erasure inside the undo window
+      x-roles: [patient]
+      x-ownership: self
+      x-step-up: true
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Undone }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/me/documents:
+    get:
+      operationId: listDocuments
+      tags: [records]
+      summary: My uploaded documents
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Documents
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentList' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: uploadDocument
+      tags: [records]
+      summary: Upload a PDF, JPEG or PNG (type checked by content, scanned, encrypted)
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [title, file]
+              properties:
+                title: { type: string, maxLength: 120 }
+                file: { type: string, format: binary }
+      responses:
+        '201':
+          description: Stored
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Document' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+        '415': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/documents/{documentId}/links:
+    post:
+      operationId: issueDocumentLink
+      tags: [records]
+      summary: Get a short-lived, single-use link to one document
+      x-roles: [patient, doctor, grievance_officer, security_owner]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Link
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FileLink' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/me/documents/{documentId}:
+    delete:
+      operationId: deleteMyDocument
+      tags: [records]
+      summary: Delete one of my uploads
+      description: |
+        RET-03. The upload disappears at once from every list and its links stop working; the purge job then
+        hard-deletes the file. Deleting again succeeds; someone else's document is 404.
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/documents/{documentId}/prohibited-id-report:
+    post:
+      operationId: reportDocumentProhibitedId
+      tags: [records]
+      summary: Report that a document shows a prohibited identifier (an Aadhaar number in the India pack)
+      description: |
+        AAD-05 (TM-43). The patient reports one of their own uploads; a verified doctor reports a document they
+        can read now through an active share. The document is quarantined at once, without anyone opening it
+        again: it disappears from every list, links already issued stop working, it leaves exports and the upload
+        quota, and it is hard-deleted by the purge job. The patient is told and can upload a masked copy. The
+        report never carries the number. Reporting again succeeds (204) for the patient; any other document is 404.
+      x-roles: [patient, doctor]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Quarantined }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/files/{token}:
+    get:
+      operationId: downloadFile
+      tags: [records]
+      summary: Download through a link (bound to the user who got it; works once)
+      x-roles: [patient, doctor, grievance_officer, security_owner]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/Token'
+      responses:
+        '200':
+          description: The decrypted file
+          headers:
+            Content-Disposition: { schema: { type: string } }
+            Cache-Control: { schema: { type: string } }
+            X-Content-Type-Options: { schema: { type: string } }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '410': { $ref: '#/components/responses/Problem' }
+  /v1/me/access-log:
+    get:
+      operationId: listAccessLog
+      tags: [records]
+      summary: Who viewed my record and when (people only)
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Views, newest first
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccessLogList' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+components:
+  parameters:
+    RequestId:
+      name: requestId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    DocumentId:
+      name: documentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Token:
+      name: token
+      in: path
+      required: true
+      schema: { type: string, minLength: 32, maxLength: 128 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, format: uuid }
+    PurposeId:
+      name: purposeId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^[PD]-[A-Z]+$' }
+    PatientId:
+      name: patientId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    GrantId:
+      name: grantId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string, maxLength: 200 }
+  responses:
+    Problem:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    RightsRequestCreate:
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type: { type: string, enum: [access, correction, nomination] }
+        details: { type: string, maxLength: 2000 }
+    ReportItem:
+      type: object
+      required: [module, action, retentionRule]
+      properties:
+        module: { type: string }
+        action: { type: string }
+        retentionRule: { type: string }
+        until: { type: string, format: date-time }
+    RightsRequest:
+      type: object
+      required: [requestId, type, status, receivedAt, ackDueAt, dueAt]
+      properties:
+        requestId: { type: string, format: uuid }
+        type: { type: string, enum: [access, export, correction, erasure, nomination] }
+        status: { type: string, enum: [received, in_progress, restricted, finalising, completed, rejected, cancelled] }
+        receivedAt: { type: string, format: date-time }
+        ackDueAt: { type: string, format: date-time }
+        dueAt: { type: string, format: date-time }
+        acknowledgedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+        outcome: { type: string }
+        undoUntil: { type: string, format: date-time }
+        holdEndsAt: { type: string, format: date-time }
+        exportExpiresAt: { type: string, format: date-time }
+        report:
+          type: array
+          items: { $ref: '#/components/schemas/ReportItem' }
+    RightsRequestList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/RightsRequest' }
+        nextCursor: { type: string }
+    Document:
+      type: object
+      required: [documentId, title, contentType, sizeBytes, createdAt]
+      properties:
+        documentId: { type: string, format: uuid }
+        title: { type: string }
+        contentType: { type: string, enum: [application/pdf, image/jpeg, image/png] }
+        sizeBytes: { type: integer }
+        createdAt: { type: string, format: date-time }
+    DocumentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Document' }
+        nextCursor: { type: string }
+    FileLink:
+      type: object
+      required: [url, expiresAt]
+      properties:
+        url: { type: string }
+        expiresAt: { type: string, format: date-time }
+    AccessLogEntry:
+      type: object
+      required: [entryId, at, actorId, actorRole, kind, purpose]
+      properties:
+        entryId: { type: string, format: uuid }
+        at: { type: string, format: date-time }
+        actorId: { type: string }
+        actorRole: { type: string }
+        kind: { type: string }
+        purpose: { type: string }
+    AccessLogList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AccessLogEntry' }
+        nextCursor: { type: string }
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string }
+        detail: { type: string }
+        instance: { type: string }
+        traceId: { type: string }
+    Consent:
+      type: object
+      required: [purposeId, granted, textVersion, updatedAt]
+      properties:
+        purposeId: { type: string }
+        granted: { type: boolean }
+        textVersion: { type: integer }
+        updatedAt: { type: string, format: date-time }
+    ConsentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Consent' }
+        nextCursor: { type: string }
+    ConsentGrant:
+      type: object
+      additionalProperties: false
+      required: [purposeId, textVersion, noticeVersion]
+      properties:
+        purposeId: { type: string, pattern: '^[PD]-[A-Z]+$' }
+        textVersion: { type: integer, minimum: 1 }
+        noticeVersion: { type: string, maxLength: 40 }
+    Grant:
+      type: object
+      required: [grantId, tier, granteeId, startsAt]
+      properties:
+        grantId: { type: string, format: uuid }
+        tier: { type: string, enum: [T1_current_care, T2_own_records, T3_history_share, T4_extension], x-extensible-enum: true }
+        granteeId: { type: string, format: uuid }
+        clinicId: { type: string, format: uuid }
+        startsAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        revokedAt: { type: string, format: date-time }
+        revocable: { type: boolean }
+    HistoryShareCreate:
+      type: object
+      additionalProperties: false
+      required: [doctorId, appointmentId, textVersion]
+      properties:
+        doctorId: { type: string, format: uuid }
+        appointmentId: { type: string, format: uuid }
+        textVersion: { type: integer, minimum: 1, description: The P-SHARE text version shown; must be the version in force }
+        noticeVersion: { type: string, maxLength: 40 }
+        until: { type: string, format: date-time, description: An earlier end the patient chose; never later than the default }
+    HistoryShare:
+      type: object
+      required: [grantId, doctorId, expiresAt]
+      properties:
+        grantId: { type: string, format: uuid }
+        doctorId: { type: string, format: uuid }
+        expiresAt: { type: string, format: date-time }
+    ExtensionRequest:
+      type: object
+      required: [requestId, doctorId, requestedAt, expiresAt, maxExtensionSeconds]
+      properties:
+        requestId: { type: string, format: uuid }
+        doctorId: { type: string, format: uuid }
+        requestedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time, description: When the request lapses if unanswered }
+        maxExtensionSeconds: { type: integer, description: The longest extra time the patient can allow }
+    ExtensionRequestList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ExtensionRequest' }
+        nextCursor: { type: string }
+    ExtensionApprove:
+      type: object
+      additionalProperties: false
+      required: [textVersion]
+      properties:
+        textVersion: { type: integer, minimum: 1, description: The P-SHARE text version shown; must be the version in force }
+        noticeVersion: { type: string, maxLength: 40 }
+        extensionSeconds: { type: integer, minimum: 60, description: A shorter extension than the maximum }
+    ExtensionRequestStatus:
+      type: object
+      required: [requestId, status, requestedAt, expiresAt]
+      properties:
+        requestId: { type: string, format: uuid }
+        status: { type: string, enum: [pending] }
+        requestedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    SharedDocumentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Document' }
+        nextCursor: { type: string }
+        accessExpiresAt: { type: string, format: date-time, description: When the doctor's access ends; warn before it }
+    GrantList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Grant' }
+        nextCursor: { type: string }

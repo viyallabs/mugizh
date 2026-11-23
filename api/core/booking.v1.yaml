@@ -1,0 +1,796 @@
+openapi: 3.1.0
+info:
+  title: Core API — booking (availability, slots, holds, appointments)
+  version: 1.0.0
+  description: |
+    Availability, slots, holds and appointments (S-113, S-121, S-122, S-123, S-131, S-144).
+    Only listed practices can be booked (K-CS-01). A hold takes a slot atomically for 15 minutes
+    (exactly one of many parallel requests wins; the rest get 409 booking.slot_taken with the next
+    open slots). An appointment is confirmed only from a verified payment (K-PAY-02), never by a
+    client call. The fee and the refund policy version are copied onto the appointment at hold time
+    (K-PAY-05). Times are RFC 3339 in UTC with the practice and patient IANA zones (K-ARC-04).
+    Online consults (video, audio) need patientInIndiaConfirmed (P10); in-person bookings do not.
+    Other people's appointments answer 404 (K-SEC-04). Staff see booking fields only.
+tags:
+  - name: booking
+    description: Availability, slots, holds, appointments
+paths:
+  /v1/practices/{practiceId}/slots:
+    get:
+      operationId: listOpenSlots
+      tags: [booking]
+      summary: Open slots of a listed practice, earliest first
+      x-roles: [patient]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/PracticeId'
+        - { name: from, in: query, required: false, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: false, schema: { type: string, format: date-time } }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Open slots
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SlotList' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/practices/{practiceId}/holds:
+    post:
+      operationId: holdSlot
+      tags: [booking]
+      summary: Hold a slot for 15 minutes (creates the appointment in state held)
+      description: Needs the P-CARE consent. For video and audio, patientInIndiaConfirmed must be true (P10).
+      x-roles: [patient]
+      x-ownership: self
+      x-side-effect: money
+      parameters:
+        - $ref: '#/components/parameters/PracticeId'
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HoldRequest' }
+      responses:
+        '201':
+          description: Held (or confirmed at once for a pay-at-clinic in-person booking)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Appointment' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409':
+          description: Slot taken (booking.slot_taken, with nextSlots) or the clinic is not taking paid bookings
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/SlotTakenProblem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+  /v1/me/appointments:
+    get:
+      operationId: listMyAppointments
+      tags: [booking]
+      summary: My appointments, newest first
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Appointments
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentList' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /v1/me/appointments/{appointmentId}:
+    get:
+      operationId: getMyAppointment
+      tags: [booking]
+      summary: One of my appointments
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+      responses:
+        '200':
+          description: Appointment
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Appointment' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/me/appointments/{appointmentId}/checkout:
+    post:
+      operationId: checkoutAppointment
+      tags: [booking]
+      summary: Open the hosted checkout for a held appointment (the amount is the fee copied at hold time)
+      x-roles: [patient]
+      x-ownership: self
+      x-side-effect: money
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      responses:
+        '200':
+          description: Checkout
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Checkout' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/me/appointments/{appointmentId}/cancel-preview:
+    get:
+      operationId: previewCancelAppointment
+      tags: [booking]
+      summary: What a cancellation would refund, shown before the patient confirms
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+      responses:
+        '200':
+          description: Refund outcome
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CancelPreview' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/me/appointments/{appointmentId}/cancel:
+    post:
+      operationId: cancelAppointment
+      tags: [booking]
+      summary: Cancel my appointment, acknowledging the refund outcome that was shown
+      x-roles: [patient]
+      x-ownership: self
+      x-side-effect: money
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CancelRequest' }
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Appointment' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/me/appointments/{appointmentId}/reschedule:
+    post:
+      operationId: rescheduleAppointment
+      tags: [booking]
+      summary: Move my confirmed appointment to another open slot of the same practice and mode (no refund, payment stays)
+      x-roles: [patient]
+      x-ownership: self
+      x-side-effect: money
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RescheduleRequest' }
+      responses:
+        '200':
+          description: Rescheduled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Appointment' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409':
+          description: Slot taken (with nextSlots), no free reschedules, or not reschedulable
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/SlotTakenProblem' }
+  /v1/practices/{practiceId}/availability:
+    get:
+      operationId: getAvailability
+      tags: [booking]
+      summary: Weekly template and exceptions of my practice
+      x-roles: [doctor, clinic_admin, front_desk]
+      x-ownership: practice
+      parameters:
+        - $ref: '#/components/parameters/PracticeId'
+      responses:
+        '200':
+          description: Availability
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Availability' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    put:
+      operationId: setAvailability
+      tags: [booking]
+      summary: Replace the weekly template. Booked slots are never deleted; conflicts are returned
+      x-roles: [doctor, clinic_admin]
+      x-ownership: practice
+      parameters:
+        - $ref: '#/components/parameters/PracticeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AvailabilityRules' }
+      responses:
+        '200':
+          description: Saved, with appointments that no longer fit
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConflictResult' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /v1/practices/{practiceId}/availability/exceptions:
+    post:
+      operationId: addAvailabilityException
+      tags: [booking]
+      summary: Add a leave or closure (local dates in the practice zone)
+      x-roles: [doctor, clinic_admin]
+      x-ownership: practice
+      parameters:
+        - $ref: '#/components/parameters/PracticeId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExceptionRequest' }
+      responses:
+        '201':
+          description: Added, with appointments that no longer fit
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExceptionResult' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /v1/practices/{practiceId}/availability/exceptions/{exceptionId}:
+    delete:
+      operationId: removeAvailabilityException
+      tags: [booking]
+      summary: Remove a leave or closure
+      x-roles: [doctor, clinic_admin]
+      x-ownership: practice
+      parameters:
+        - $ref: '#/components/parameters/PracticeId'
+        - name: exceptionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Removed }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/practices/{practiceId}/availability/conflicts:
+    get:
+      operationId: listAvailabilityConflicts
+      tags: [booking]
+      summary: Booked appointments that no longer fit the availability (to reschedule)
+      x-roles: [doctor, clinic_admin, front_desk]
+      x-ownership: practice
+      parameters:
+        - $ref: '#/components/parameters/PracticeId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Conflicts
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConflictList' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/practices/{practiceId}/day:
+    get:
+      operationId: getPracticeDay
+      tags: [booking]
+      summary: Day view of appointments (booking fields only), by local date in the practice zone
+      x-roles: [doctor, clinic_admin, front_desk]
+      x-ownership: practice
+      parameters:
+        - $ref: '#/components/parameters/PracticeId'
+        - { name: date, in: query, required: true, schema: { type: string, format: date } }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Day view
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DayList' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/appointments/{appointmentId}/marks:
+    post:
+      operationId: markAppointment
+      tags: [booking]
+      summary: Mark arrived, completed, patient no-show or doctor no-show (audited)
+      description: |
+        In-person appointments only. An online (video or audio) consultation's outcome is
+        recorded by the consultation itself from join evidence; any mark on one answers 409
+        `booking.online_outcome_by_consult` (TM-13).
+      x-roles: [doctor, clinic_admin, front_desk]
+      x-ownership: practice
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MarkRequest' }
+      responses:
+        '200':
+          description: New state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MarkResult' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/appointments/{appointmentId}/staff-cancel:
+    post:
+      operationId: staffCancelAppointment
+      tags: [booking]
+      summary: Cancel on behalf of the doctor or the clinic (full refund, RF04)
+      x-roles: [doctor, clinic_admin, front_desk]
+      x-ownership: practice
+      x-side-effect: money
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      responses:
+        '204': { description: Cancelled }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/appointments/{appointmentId}/reconfirm:
+    post:
+      operationId: reconfirmAppointment
+      tags: [booking]
+      summary: The clinic confirms the doctor will be there (day-before task)
+      x-roles: [doctor, clinic_admin, front_desk]
+      x-ownership: practice
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Reconfirmed }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/clinics/{clinicId}/reconfirmations:
+    get:
+      operationId: listReconfirmations
+      tags: [booking]
+      summary: Appointments the clinic has not yet reconfirmed (no patient identity)
+      x-roles: [clinic_admin, front_desk]
+      x-ownership: clinic
+      parameters:
+        - { name: clinicId, in: path, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Unconfirmed tasks
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReconfirmationList' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/clinics/{clinicId}/closures:
+    post:
+      operationId: closeClinic
+      tags: [booking]
+      summary: Close my clinic (or one branch) for a local date; cancel or ask patients to reschedule
+      description: |
+        Removes the day's open slots and handles each confirmed appointment of that day: mode
+        `cancel` cancels it as the clinic (full refund by the stored policy, RF04; the patient is
+        notified) and releases unpaid holds; mode `reschedule` marks it as needing a new time (the
+        patient is notified and reschedules for free). Appointments already started, completed or
+        in the past are untouched. The same closure twice is one closure; asking again with the
+        other mode answers 409. If processing stops half way the closure stays `processing` and is
+        finished by the background sweep.
+      x-roles: [clinic_admin]
+      x-ownership: clinic
+      x-side-effect: money
+      parameters:
+        - { name: clinicId, in: path, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClosureRequest' }
+      responses:
+        '200':
+          description: The closure (new, or the one already recorded)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Closure' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+    get:
+      operationId: listClinicClosures
+      tags: [booking]
+      summary: Closures of my clinic (counts only, no patient data)
+      x-roles: [clinic_admin, front_desk]
+      x-ownership: clinic
+      parameters:
+        - { name: clinicId, in: path, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Closures, newest date first
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClosureList' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, format: uuid }
+    IdempotencyKeyRequired:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+    PracticeId:
+      name: practiceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AppointmentId:
+      name: appointmentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string, maxLength: 200 }
+  responses:
+    Problem:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string }
+        detail: { type: string }
+        instance: { type: string }
+        traceId: { type: string }
+    SlotTakenProblem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string }
+        detail: { type: string }
+        instance: { type: string }
+        traceId: { type: string }
+        nextSlots:
+          type: array
+          items: { $ref: '#/components/schemas/Slot' }
+    ConsultMode:
+      type: string
+      enum: [in_person, video, audio]
+      x-extensible-enum: true
+    AppointmentState:
+      type: string
+      enum: [held, pending_payment, confirmed, in_progress, completed, cancelled, no_show, expired]
+      x-extensible-enum: true
+    Slot:
+      type: object
+      required: [slotId, practiceId, startsAt, endsAt, mode]
+      properties:
+        slotId: { type: string, format: uuid }
+        practiceId: { type: string, format: uuid }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        mode: { $ref: '#/components/schemas/ConsultMode' }
+    SlotList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Slot' }
+        nextCursor: { type: string }
+    HoldRequest:
+      type: object
+      required: [slotId, mode, patientTimeZone]
+      properties:
+        slotId: { type: string, format: uuid }
+        mode: { $ref: '#/components/schemas/ConsultMode' }
+        patientTimeZone: { type: string, minLength: 1, maxLength: 64, description: IANA zone of the patient }
+        patientInIndiaConfirmed: { type: boolean, description: Required true for video and audio (P10) }
+    Appointment:
+      type: object
+      required: [appointmentId, practiceId, doctorId, clinicId, state, mode, startsAt, endsAt, practiceTimeZone, patientTimeZone, practiceLocalStart, patientLocalStart, feeAmount, currency, feeVersion, refundPolicyVersion, settlementMode, rescheduleCount, needsReschedule]
+      properties:
+        appointmentId: { type: string, format: uuid }
+        practiceId: { type: string, format: uuid }
+        doctorId: { type: string, format: uuid }
+        clinicId: { type: string, format: uuid }
+        state: { $ref: '#/components/schemas/AppointmentState' }
+        mode: { $ref: '#/components/schemas/ConsultMode' }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        practiceTimeZone: { type: string }
+        patientTimeZone: { type: string }
+        practiceLocalStart: { type: string, format: date-time, description: Start in the practice zone }
+        patientLocalStart: { type: string, format: date-time, description: Start in the patient zone }
+        patientInIndiaConfirmed: { type: boolean }
+        feeAmount: { type: integer, format: int64, description: Minor units, copied at hold time }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        feeVersion: { type: string }
+        refundPolicyVersion: { type: string }
+        settlementMode: { type: string, enum: [clinic_collected, pay_at_clinic] }
+        holdExpiresAt: { type: string, format: date-time }
+        cancelledBy: { type: string, enum: [patient, doctor, clinic, system] }
+        noShowBy: { type: string, enum: [patient, doctor] }
+        rescheduleCount: { type: integer }
+        needsReschedule: { type: boolean }
+    AppointmentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Appointment' }
+        nextCursor: { type: string }
+    Checkout:
+      type: object
+      required: [appointment, amountMinor, currency]
+      properties:
+        appointment: { $ref: '#/components/schemas/Appointment' }
+        orderId: { type: string }
+        checkoutUrl: { type: string }
+        orderState: { type: string }
+        amountMinor: { type: integer, format: int64 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+    CancelPreview:
+      type: object
+      required: [paid, refundAmount, currency, minutesBeforeSlot, byWhom]
+      properties:
+        paid: { type: boolean }
+        refundAmount: { type: integer, format: int64, description: Minor units the patient gets back }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        ruleId: { type: string }
+        minutesBeforeSlot: { type: integer }
+        byWhom: { type: string, enum: [patient, clinic] }
+    CancelRequest:
+      type: object
+      required: [acknowledgedRefundAmount]
+      properties:
+        acknowledgedRefundAmount: { type: integer, format: int64, minimum: 0, description: The refundAmount from cancel-preview }
+    RescheduleRequest:
+      type: object
+      required: [slotId]
+      properties:
+        slotId: { type: string, format: uuid }
+    AvailabilityRule:
+      type: object
+      required: [weekday, startLocal, endLocal, slotMinutes, mode]
+      properties:
+        weekday: { type: integer, minimum: 0, maximum: 6, description: 0 is Sunday }
+        startLocal: { type: string, pattern: '^[0-2][0-9]:[0-5][0-9]$' }
+        endLocal: { type: string, pattern: '^[0-2][0-9]:[0-5][0-9]$' }
+        slotMinutes: { type: integer, minimum: 5, maximum: 240 }
+        mode: { $ref: '#/components/schemas/ConsultMode' }
+    AvailabilityRules:
+      type: object
+      required: [rules]
+      properties:
+        rules:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/AvailabilityRule' }
+    ExceptionRequest:
+      type: object
+      required: [kind, fromDate, toDate]
+      properties:
+        kind: { type: string, enum: [leave, closure] }
+        fromDate: { type: string, format: date }
+        toDate: { type: string, format: date }
+    AvailabilityException:
+      type: object
+      required: [exceptionId, kind, startsAt, endsAt]
+      properties:
+        exceptionId: { type: string, format: uuid }
+        kind: { type: string, enum: [leave, closure] }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+    Availability:
+      type: object
+      required: [practiceId, timeZone, rules, exceptions]
+      properties:
+        practiceId: { type: string, format: uuid }
+        timeZone: { type: string }
+        rules:
+          type: array
+          items: { $ref: '#/components/schemas/AvailabilityRule' }
+        exceptions:
+          type: array
+          items: { $ref: '#/components/schemas/AvailabilityException' }
+    Conflict:
+      type: object
+      required: [appointmentId, patientId, practiceId, startsAt, mode, state]
+      properties:
+        appointmentId: { type: string, format: uuid }
+        patientId: { type: string, format: uuid }
+        practiceId: { type: string, format: uuid }
+        startsAt: { type: string, format: date-time }
+        mode: { $ref: '#/components/schemas/ConsultMode' }
+        state: { $ref: '#/components/schemas/AppointmentState' }
+    ConflictResult:
+      type: object
+      required: [conflicts]
+      properties:
+        conflicts:
+          type: array
+          items: { $ref: '#/components/schemas/Conflict' }
+    ExceptionResult:
+      type: object
+      required: [exception, conflicts]
+      properties:
+        exception: { $ref: '#/components/schemas/AvailabilityException' }
+        conflicts:
+          type: array
+          items: { $ref: '#/components/schemas/Conflict' }
+    ConflictList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Conflict' }
+        nextCursor: { type: string }
+    DayItem:
+      type: object
+      required: [appointmentId, patientId, startsAt, endsAt, mode, state, needsReschedule]
+      properties:
+        appointmentId: { type: string, format: uuid }
+        patientId: { type: string, format: uuid }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        mode: { $ref: '#/components/schemas/ConsultMode' }
+        state: { $ref: '#/components/schemas/AppointmentState' }
+        noShowBy: { type: string, enum: [patient, doctor] }
+        cancelledBy: { type: string, enum: [patient, doctor, clinic, system] }
+        needsReschedule: { type: boolean }
+        reconfirmation: { type: string, enum: [pending, overdue, reconfirmed, void] }
+    DayList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/DayItem' }
+        nextCursor: { type: string }
+    MarkRequest:
+      type: object
+      required: [mark]
+      properties:
+        mark: { type: string, enum: [arrived, completed, patient_no_show, doctor_no_show] }
+    MarkResult:
+      type: object
+      required: [appointmentId, state]
+      properties:
+        appointmentId: { type: string, format: uuid }
+        state: { $ref: '#/components/schemas/AppointmentState' }
+    Reconfirmation:
+      type: object
+      required: [appointmentId, practiceId, doctorId, startsAt, mode, dueAt, state]
+      properties:
+        appointmentId: { type: string, format: uuid }
+        practiceId: { type: string, format: uuid }
+        doctorId: { type: string, format: uuid }
+        startsAt: { type: string, format: date-time }
+        mode: { $ref: '#/components/schemas/ConsultMode' }
+        dueAt: { type: string, format: date-time }
+        state: { type: string, enum: [pending, overdue] }
+    ReconfirmationList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Reconfirmation' }
+        nextCursor: { type: string }
+    ClosureRequest:
+      type: object
+      additionalProperties: false
+      required: [date, mode]
+      properties:
+        date: { type: string, format: date, description: The local date to close, read in the time zone of each practice }
+        mode: { type: string, enum: [cancel, reschedule], x-extensible-enum: true, description: cancel cancels and refunds; reschedule asks patients to pick a new time }
+        branchId: { type: string, format: uuid, description: Close only this branch; omit to close every branch of the clinic }
+    Closure:
+      type: object
+      required: [closureId, clinicId, date, mode, state, cancelledCount, flaggedCount, createdAt]
+      properties:
+        closureId: { type: string, format: uuid }
+        clinicId: { type: string, format: uuid }
+        branchId: { type: string, format: uuid }
+        date: { type: string, format: date }
+        mode: { type: string, enum: [cancel, reschedule], x-extensible-enum: true }
+        state: { type: string, enum: [processing, done], x-extensible-enum: true, description: processing means some appointments are still being handled; the sweep finishes them }
+        cancelledCount: { type: integer, minimum: 0 }
+        flaggedCount: { type: integer, minimum: 0, description: Appointments marked as needing a new time (reschedule mode) }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+    ClosureList:
+      type: object
+      required: [items]
+      properties:
+        nextCursor: { type: string }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Closure' }

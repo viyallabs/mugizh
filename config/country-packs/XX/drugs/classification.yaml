@@ -1,0 +1,7 @@
+# Synthetic drug table for test country XX. The names are made up and are not medicines.
+version: 1.0.0
+status: approved
+entries:
+  - { ref: xx-alpha-10, generic_name: xxdrugalpha, strength: 10 mg, form: tablet, route: oral, lists: [list_a], source: synthetic fixture }
+  - { ref: xx-omega-5, generic_name: xxdrugomega, strength: 5 mg, form: tablet, route: oral, lists: [list_o], source: synthetic fixture }
+  - { ref: xx-beta-1, generic_name: xxdrugbeta, strength: 1 mg, form: tablet, route: oral, lists: [prohibited], source: synthetic fixture }

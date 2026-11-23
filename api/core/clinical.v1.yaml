@@ -1,0 +1,624 @@
+openapi: 3.1.0
+info:
+  title: Core API — clinical (notes and prescriptions)
+  version: 1.0.0
+  description: |
+    Consult notes with versions (S-139), draft prescriptions (S-149), signing (S-150), the patient's
+    own view (S-151) and amendments (S-164). The server re-runs every safety check at signing and
+    never suggests or fills in a drug or dose (K-CS-03). Signed versions are immutable (K-CS-05); a
+    change is a new version. Production signing stays blocked until the e-signature method is decided (N5).
+    Other people's resources return 404 (K-SEC-04).
+tags:
+  - name: clinical
+    description: Notes, prescriptions, verification
+paths:
+  /v1/appointments/{appointmentId}/note:
+    parameters:
+      - $ref: '#/components/parameters/AppointmentId'
+    get:
+      operationId: getConsultNote
+      tags: [clinical]
+      summary: The newest version of my note for this appointment
+      x-roles: [doctor]
+      x-ownership: practice
+      responses:
+        '200':
+          description: The note
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConsultNote' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    put:
+      operationId: saveConsultNote
+      tags: [clinical]
+      summary: Save the draft note (a signed version is never changed; saving after signing starts a new version)
+      x-roles: [doctor]
+      x-ownership: practice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConsultNoteInput' }
+      responses:
+        '200':
+          description: The saved draft
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConsultNote' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/appointments/{appointmentId}/prescription:
+    parameters:
+      - $ref: '#/components/parameters/AppointmentId'
+    get:
+      operationId: getAppointmentPrescription
+      tags: [clinical]
+      summary: The newest version of my prescription for this appointment
+      x-roles: [doctor]
+      x-ownership: practice
+      responses:
+        '200':
+          description: The prescription version
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Prescription' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    put:
+      operationId: saveDraftPrescription
+      tags: [clinical]
+      summary: Replace the draft prescription. Items are stored exactly as entered; free text only in instructions
+      x-roles: [doctor]
+      x-ownership: practice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PrescriptionInput' }
+      responses:
+        '200':
+          description: The saved draft
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Prescription' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/appointments/{appointmentId}/prescription/check:
+    parameters:
+      - $ref: '#/components/parameters/AppointmentId'
+    post:
+      operationId: checkDraftPrescription
+      tags: [clinical]
+      summary: Run the prescribing rules on the draft (draft stage). Per-item result; never a suggestion
+      x-roles: [doctor]
+      x-ownership: practice
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyOptional'
+      responses:
+        '200':
+          description: The evaluation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuleCheck' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/appointments/{appointmentId}/prescription/sign:
+    parameters:
+      - $ref: '#/components/parameters/AppointmentId'
+    post:
+      operationId: signPrescription
+      tags: [clinical]
+      summary: Sign and issue the prescription. Needs a verified doctor, a step-up and the electronic signature
+      description: |
+        Every check is re-run on the server. Refusals: 403 clinical.doctor_not_verified, 403 auth.step_up_required,
+        422 clinical.rules_blocked (per-item reasons), 503 clinical.esign_unavailable (no approved method yet,
+        N5; nothing is issued), 503 clinical.esign_failed (nothing is issued).
+      x-roles: [doctor]
+      x-ownership: practice
+      x-step-up: true
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      responses:
+        '200':
+          description: Issued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SignResult' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/prescriptions/{prescriptionId}/amend:
+    parameters:
+      - $ref: '#/components/parameters/PrescriptionId'
+    post:
+      operationId: amendPrescription
+      tags: [clinical]
+      summary: Open a new draft version copied from the latest signed one (the old version stays immutable)
+      x-roles: [doctor]
+      x-ownership: practice
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyOptional'
+      responses:
+        '200':
+          description: The new draft
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Prescription' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/me/prescriptions:
+    get:
+      operationId: listMyPrescriptions
+      tags: [clinical]
+      summary: My signed prescriptions, newest first
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Prescriptions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PrescriptionList' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /v1/me/prescriptions/{prescriptionId}:
+    parameters:
+      - $ref: '#/components/parameters/PrescriptionId'
+    get:
+      operationId: getMyPrescription
+      tags: [clinical]
+      summary: One of my signed prescriptions (latest version, or the one named by version)
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - name: version
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: The prescription version
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Prescription' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/me/prescriptions/{prescriptionId}/reminders:
+    parameters:
+      - $ref: '#/components/parameters/PrescriptionId'
+    get:
+      operationId: listMyPrescriptionReminders
+      tags: [clinical]
+      summary: The reminder switch of each item of my latest signed prescription version
+      description: |
+        S-155. With P-REMIND every item's reminders are on by default; each can be turned off and on again.
+        `active` says whether reminders are scheduled now (none without P-REMIND).
+      x-roles: [patient]
+      x-ownership: self
+      responses:
+        '200':
+          description: Item reminder states
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ItemReminderList' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/me/prescriptions/{prescriptionId}/reminders/{itemRef}:
+    parameters:
+      - $ref: '#/components/parameters/PrescriptionId'
+      - name: itemRef
+        in: path
+        required: true
+        schema: { type: string, pattern: '^[A-Za-z0-9_-]{1,40}$' }
+    put:
+      operationId: setMyPrescriptionReminder
+      tags: [clinical]
+      summary: Turn one item's reminders off or on again
+      description: |
+        S-155. Off cancels the item's scheduled reminders; on schedules them again and needs P-REMIND (403
+        consent.required otherwise, so the app can offer it). The choice is kept when the prescription is amended.
+      x-roles: [patient]
+      x-ownership: self
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ItemReminderSwitch' }
+      responses:
+        '204': { description: Saved }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/me/appointments/{appointmentId}/note:
+    parameters:
+      - $ref: '#/components/parameters/AppointmentId'
+    get:
+      operationId: getMyConsultNote
+      tags: [clinical]
+      summary: The signed note of one of my appointments
+      x-roles: [patient]
+      x-ownership: self
+      responses:
+        '200':
+          description: The note
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConsultNote' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/patients/{patientId}/history:
+    parameters:
+      - name: patientId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getPatientHistory
+      tags: [clinical]
+      summary: Signed notes and prescriptions of other doctors, for a patient who shared their history with me
+      description: |
+        Goes through the records gate and is audited. Only signed versions of other doctors are returned,
+        never drafts. The response says when the share ends (access.expiresAt) and from when the app must
+        warn (access.warnAt). 403 consent.required when the share has ended, was revoked or was never given:
+        errors[0].code says why (grant_expired, out_of_scope, no_active_grant, purpose_not_granted) and the
+        app shows the request-access prompt (requestAccessExtension in the records API). 404 when the doctor
+        has no relationship with the patient. 403 clinical.doctor_not_verified when the doctor is not Verified now.
+      x-roles: [doctor]
+      x-ownership: practice
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: The history
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatientHistory' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/prescription-verifications/{reference}:
+    get:
+      operationId: verifyPrescription
+      tags: [clinical]
+      summary: Is this verification reference a genuine, unaltered signed prescription? Shows no patient data
+      description: |
+        Public and rate-limited per IP. An unknown or malformed reference answers not_valid exactly like an
+        invalid one. A valid answer carries only the date signed and the prescriber's registration number.
+      x-roles: [public]
+      x-ownership: none
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+      responses:
+        '200':
+          description: The verdict
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Verification' }
+        '429': { $ref: '#/components/responses/Problem' }
+components:
+  parameters:
+    AppointmentId:
+      name: appointmentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PrescriptionId:
+      name: prescriptionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKeyRequired:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKeyOptional:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, format: uuid }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string, maxLength: 200 }
+  responses:
+    Problem:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    ItemReminderList:
+      type: object
+      additionalProperties: false
+      required: [reminders]
+      properties:
+        reminders:
+          type: array
+          description: One entry per item of the prescription (bounded by the prescription, so not paged)
+          items: { $ref: '#/components/schemas/ItemReminder' }
+    ItemReminder:
+      type: object
+      additionalProperties: false
+      required: [itemRef, kind, enabled, active]
+      properties:
+        itemRef: { type: string, maxLength: 40 }
+        kind: { type: string, enum: [med, test] }
+        enabled: { type: boolean, description: "The patient's switch (on by default)" }
+        active: { type: boolean, description: "Reminders are scheduled now" }
+    ItemReminderSwitch:
+      type: object
+      additionalProperties: false
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string }
+        detail: { type: string }
+        instance: { type: string }
+        traceId: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, code]
+            properties:
+              field: { type: string }
+              code: { type: string }
+    HistoryAccess:
+      type: object
+      required: [grantId, tier, expiresAt, warnAt, warn]
+      properties:
+        grantId: { type: string, format: uuid }
+        tier: { type: string, enum: [T3_history_share, T4_extension], x-extensible-enum: true }
+        expiresAt: { type: string, format: date-time, description: When the doctor's access ends. Reads after this fail }
+        warnAt: { type: string, format: date-time, description: From this time the app shows the expiry warning (10 minutes before the end) }
+        warn: { type: boolean, description: True when warnAt has passed on the server clock }
+    HistoryItem:
+      type: object
+      required: [kind, authorId, signedAt]
+      properties:
+        kind: { type: string, enum: [note, prescription] }
+        authorId: { type: string, format: uuid }
+        signedAt: { type: string, format: date-time }
+        note: { $ref: '#/components/schemas/ConsultNote' }
+        prescription: { $ref: '#/components/schemas/Prescription' }
+    PatientHistory:
+      type: object
+      required: [access, items]
+      properties:
+        access: { $ref: '#/components/schemas/HistoryAccess' }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/HistoryItem' }
+        nextCursor: { type: string }
+    ConsultNoteInput:
+      type: object
+      additionalProperties: false
+      properties:
+        complaint: { type: string, maxLength: 4000 }
+        findings: { type: string, maxLength: 4000 }
+        diagnosis: { type: string, maxLength: 4000 }
+        advice: { type: string, maxLength: 4000 }
+    ConsultNote:
+      type: object
+      required: [noteId, appointmentId, version, state, complaint, findings, diagnosis, advice]
+      properties:
+        noteId: { type: string, format: uuid }
+        appointmentId: { type: string, format: uuid }
+        version: { type: integer }
+        state: { type: string, enum: [draft, signed] }
+        complaint: { type: string }
+        findings: { type: string }
+        diagnosis: { type: string }
+        advice: { type: string }
+        signedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Dose:
+      type: object
+      additionalProperties: false
+      properties:
+        quantity: { type: number, format: double, minimum: 0 }
+        unit: { type: string, maxLength: 20 }
+    Frequency:
+      type: object
+      additionalProperties: false
+      properties:
+        times: { type: integer, minimum: 0 }
+        period: { type: string, maxLength: 20 }
+    Duration:
+      type: object
+      additionalProperties: false
+      properties:
+        value: { type: integer, minimum: 0 }
+        unit: { type: string, maxLength: 20 }
+    TaperStep:
+      type: object
+      additionalProperties: false
+      properties:
+        dose: { $ref: '#/components/schemas/Dose' }
+        frequency: { $ref: '#/components/schemas/Frequency' }
+        duration: { $ref: '#/components/schemas/Duration' }
+    Item:
+      type: object
+      additionalProperties: false
+      required: [ref, drugRef, context]
+      properties:
+        ref: { type: string, pattern: '^[A-Za-z0-9_-]{1,80}$' }
+        drugRef: { type: string, pattern: '^[a-z0-9][a-z0-9_-]{0,79}$', description: Drug master reference chosen by the doctor. }
+        context: { type: string, enum: [new_drug, refill, add_on] }
+        forNewCondition: { type: boolean }
+        dose: { $ref: '#/components/schemas/Dose' }
+        frequency: { $ref: '#/components/schemas/Frequency' }
+        duration: { $ref: '#/components/schemas/Duration' }
+        route: { type: string, maxLength: 20 }
+        asNeeded: { type: boolean }
+        taper:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/TaperStep' }
+        instructions: { type: string, maxLength: 500, description: The only free-text field of an item. }
+    TestItem:
+      type: object
+      additionalProperties: false
+      required: [ref, name]
+      properties:
+        ref: { type: string, pattern: '^[A-Za-z0-9_-]{1,80}$' }
+        name: { type: string, maxLength: 100 }
+        dueOn: { type: string, format: date }
+        intervalDays: { type: integer, minimum: 1, maximum: 365 }
+        repeats: { type: integer, minimum: 1 }
+    PrescriptionInput:
+      type: object
+      additionalProperties: false
+      required: [lines]
+      properties:
+        lines:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/Item' }
+        tests:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/TestItem' }
+        advice: { type: string, maxLength: 4000 }
+        followUpOn: { type: string, format: date }
+    Prescription:
+      type: object
+      required: [prescriptionId, appointmentId, version, state, lines, tests]
+      properties:
+        prescriptionId: { type: string, format: uuid }
+        appointmentId: { type: string, format: uuid }
+        version: { type: integer }
+        state: { type: string, enum: [draft, signed] }
+        lines:
+          type: array
+          items: { $ref: '#/components/schemas/Item' }
+        tests:
+          type: array
+          items: { $ref: '#/components/schemas/TestItem' }
+        advice: { type: string }
+        followUpOn: { type: string }
+        signedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        consultMode: { type: string }
+        ruleSetVersion: { type: string }
+        classificationVersion: { type: string }
+        document:
+          type: object
+          additionalProperties: true
+          description: The canonical signed document (signed versions only). A PDF renderer prints exactly these fields.
+    PrescriptionSummary:
+      type: object
+      required: [prescriptionId, appointmentId, version, signedAt]
+      properties:
+        prescriptionId: { type: string, format: uuid }
+        appointmentId: { type: string, format: uuid }
+        version: { type: integer }
+        signedAt: { type: string, format: date-time }
+    PrescriptionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/PrescriptionSummary' }
+        nextCursor: { type: string }
+    Reason:
+      type: object
+      required: [code, key]
+      properties:
+        code: { type: string }
+        key: { type: string, description: Translation key (K-GLB-02). }
+    CheckStep:
+      type: object
+      required: [id, passed]
+      properties:
+        id: { type: string }
+        passed: { type: boolean }
+        reason: { $ref: '#/components/schemas/Reason' }
+    ItemResult:
+      type: object
+      required: [ref, allowed, reasons]
+      properties:
+        ref: { type: string }
+        drugRef: { type: string }
+        allowed: { type: boolean }
+        reasons:
+          type: array
+          items: { $ref: '#/components/schemas/Reason' }
+    RuleCheck:
+      type: object
+      required: [allowed, stage, checks, reasons, items]
+      properties:
+        allowed: { type: boolean }
+        stage: { type: string, enum: [draft, sign] }
+        ruleSetVersion: { type: string }
+        ruleSetChecksum: { type: string }
+        classificationVersion: { type: string }
+        mode: { type: string }
+        consultType: { type: string }
+        checks:
+          type: array
+          items: { $ref: '#/components/schemas/CheckStep' }
+        reasons:
+          type: array
+          items: { $ref: '#/components/schemas/Reason' }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ItemResult' }
+    SignResult:
+      type: object
+      required: [prescriptionId, version, signedAt, verificationReference]
+      properties:
+        prescriptionId: { type: string, format: uuid }
+        version: { type: integer }
+        signedAt: { type: string, format: date-time }
+        verificationReference: { type: string, description: Random token of 256 bits, printed on the PDF. }
+    Verification:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [valid, not_valid] }
+        signedAt: { type: string, format: date-time }
+        registrationNumber: { type: string }

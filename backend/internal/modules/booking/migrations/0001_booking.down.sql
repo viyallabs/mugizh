@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS processed_event;
+DROP TABLE IF EXISTS event_outbox;
+DROP TABLE IF EXISTS reconfirmation_task;
+DROP TABLE IF EXISTS hold;
+DROP TABLE IF EXISTS appointment;
+DROP TABLE IF EXISTS slot;
+DROP TABLE IF EXISTS availability_exception;
+DROP TABLE IF EXISTS availability_rule;
+DROP TABLE IF EXISTS availability;

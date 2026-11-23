@@ -1,0 +1,22 @@
+# Vendor register (K-DP-08, adapter rule A3). No vendor receives personal data until it is
+# listed here with a processor agreement and its processing countries are allowed by the
+# country pack's residency block (K-DP-01, K-GLB-03). Loaded and enforced by modules/config.
+# environments: when present, the vendor may be used only in those environments.
+vendors:
+  - id: push-fcm-apns
+    kind: push
+    processor_agreement: false          # pending lawyer review (data inventory open item 10) [VALIDATE]
+    processing_countries: []            # [FILL] Google and Apple process outside India
+    status: pending_legal
+  - id: manual
+    kind: verification
+    processor_agreement: true           # internal team process, no third-party processor
+    processing_countries: []            # runs inside the pack's own regions
+    status: internal
+  - { id: fake-sms, kind: sms, processor_agreement: false, processing_countries: [], status: test_only, environments: [local, test, dev] }
+  - { id: fake-payments, kind: payments, processor_agreement: false, processing_countries: [], status: test_only, environments: [local, test, dev] }
+  - { id: fake-video, kind: video, processor_agreement: false, processing_countries: [], status: test_only, environments: [local, test, dev] }
+  - { id: fake-esign, kind: esign, processor_agreement: false, processing_countries: [], status: test_only, environments: [local, test, dev] }
+  - { id: fake-push, kind: push, processor_agreement: false, processing_countries: [], status: test_only, environments: [local, test, dev] }
+  - { id: fake-email, kind: email, processor_agreement: false, processing_countries: [], status: test_only, environments: [local, test, dev] }
+  - { id: fake-geocoding, kind: geocoding, processor_agreement: false, processing_countries: [], status: test_only, environments: [local, test, dev] }

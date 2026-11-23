@@ -1,0 +1,206 @@
+# India telemedicine prescribing rules: decision tables (DRAFT)
+# Story S-012. Source: Telemedicine Practice Guidelines 2020 (Appendix 5, IMC Regulations 2002, BoG notice 25 Mar 2020),
+# as amended (see source.amendments).
+# This file is the draft of country-pack data (config/country-packs/IN/rules/), loaded by the rules engine (S-138, S-099).
+# K-GLB-01: no drug lists, windows or messages in code; they live here.
+# K-CS-07: any change needs review by a registered doctor, recorded in the PR.
+# Every value marked "validate: true" must be checked against the primary guideline text before use.
+#
+# Two layers (kept separate on purpose):
+#   1. regulatory_rules: what the guidelines allow. Only changed when the law changes.
+#   2. platform_rules:   stricter limits we choose. Changed by founder + doctor decision.
+# An item is allowed only if the regulatory layer allows it AND no platform rule blocks it.
+
+pack: IN
+ruleset: telemedicine-prescribing
+version: 1.1.0-draft
+status: draft            # draft -> doctor_reviewed -> legal_reviewed -> approved
+source:
+  title: Telemedicine Practice Guidelines 2020
+  issued_by: Board of Governors in supersession of MCI (now NMC)
+  date: 2020-03-25
+  still_cited_as_of: 2026-10   # NMC notice, see docs/compliance-applicability.md (C09)
+  amendments:                  # every amendment that changes a list or rule is recorded here, with the version that applied it
+    - id: AMD-2020-04
+      date: 2020-04-11         # sources differ: 11, 12 or 18 Apr 2020; confirm on the notice
+      issued_by: Board of Governors
+      summary: Phenobarbitone, clobazam and clonazepam added to List A (first consult and follow-up).
+      applied_in_version: 1.1.0-draft
+      validate: true           # checked against press, journal and compiled lists only; the original notice and
+                               # whether it is still in force must be confirmed (doctor + lawyer) before PL03 can change
+  review_for_new_amendments: before each release, and at least every 3 months (compliance watch, S-008)
+reviewed_by: null        # registered doctor: name, registration number, council, date (K-CS-07)
+legal_reviewed_by: null  # lawyer: name, date (S-009)
+
+# Drug classifications are versioned separately from this ruleset, because the drug master changes more often.
+# Every prescription stores both versions (K-CS-02, ADR-18).
+drug_classification:
+  source: drug master (S-126), doctor-curated
+  version_ref: required        # e.g. IN-DRUG-CLASS 2026.12.1; stored on every RuleCheckResult
+  membership: multiple         # a drug can be in more than one list, e.g. [list_a, list_b]
+  # Precedence: a drug can never be both prohibited and permitted.
+  precedence:
+    - prohibited               # wins over every other list
+    - amendment_exception      # only a drug named in an amendment's except list leaves "prohibited"
+    - [list_o, list_a, list_b] # permitted lists, combined
+  import_validation:           # the drug master import fails (no new classification version) if any is true
+    - drug_matches_prohibited_and_is_in_a_permitted_list_without_amendment_exception
+    - amendment_exception_names_a_drug_not_in_the_drug_master
+    - list_b_drug_without_a_condition_tag
+
+# ---------- Definitions ----------
+consult:
+  modes: [video, audio, text, in_person]
+  remote_modes: [video, audio, text]
+  v1_enabled_modes: [video, audio, in_person]   # text consults are not in v1.0 scope (R-40)
+  # The mode used for prescribing is the mode in effect when the prescription is signed.
+  # A video consult that dropped to audio before signing is treated as audio.
+  mode_for_rules: mode_at_signing
+  # The guidelines cover teleconsultations with patients in India only; consultations outside India's
+  # jurisdiction are excluded (compliance review 2026-11-16, issue R-02) [VALIDATE].
+  patient_location:
+    remote_modes_allowed_for: [IN]            # patient must be in India for video, audio or text
+    evidence: [patient_declaration_at_booking, patient_declaration_at_prejoin]   # shown to the doctor
+    in_person: any                            # a patient travelling to India can book in person
+  types: [first, follow_up]
+  follow_up:
+    same_doctor: true
+    requires_prior_in_person_consult: true
+    window:                          # "within 6 months" of the previous in-person consult; validate: true
+      months: 6                      # calendar months, not a day count
+      measured_from: last_in_person_consult   # open question Q7
+      time_zone: patient             # K-ARC-04
+      month_end: clamp               # 31 Aug + 6 months = end of February
+      inclusive: true
+    same_health_condition: doctor_attests
+    exclusions:                      # not a follow-up if any is true; doctor attests
+      - new_symptoms_outside_same_condition
+      - doctor_does_not_recall_previous_context
+    prior_in_person_evidence:        # how the engine knows an in-person consult happened
+      - platform_in_person_consult_record
+      - doctor_attestation_with_date  # off-platform visit; audited; open question Q2
+  # Consult type is decided per prescription item. In a follow-up, an item the doctor marks as being
+  # for a NEW condition is evaluated as a first consult for that condition.
+  item_condition_scope: [same_condition, new_condition]
+  new_condition_item_evaluated_as: first
+  initiators: [patient, doctor, caregiver, health_worker]
+
+# ---------- Drug categories (regulatory) ----------
+categories:
+  prohibited:            # "List C" in the guidelines
+    description: High potential of abuse. Never prescribed through telemedicine.
+    match:
+      regulatory_schedule: [X]               # Drugs and Cosmetics Rules 1945, Schedule X
+      ndps_controlled: true                  # NDPS Act 1985 narcotic or psychotropic substance
+    except_by_amendment: [phenobarbitone, clobazam, clonazepam]   # AMD-2020-04 moved these to List A; validate: true
+  list_o:
+    description: Safe medicines, over-the-counter type (e.g. paracetamol, ORS), and medicines notified for public-health emergencies.
+    match:
+      curated: true                          # doctor-reviewed list in drugs/list_o.yaml (to be built in S-126)
+  list_a:
+    description: Relatively safe medicines with low abuse potential. First prescription only in a video consult; refills in a follow-up by any mode.
+    match:
+      curated: true
+      includes_by_amendment: [phenobarbitone, clobazam, clonazepam]   # AMD-2020-04; see platform rule PL03
+  list_b:
+    description: Medicines that may be added on in a follow-up for the same condition, to optimise treatment started in person (e.g. a second antihypertensive).
+    match:
+      curated: true                          # its own curated list; NOT every List A drug
+  # A drug with no list membership is "unclassified". No regulatory row allows it in a remote consult,
+  # so it is blocked (fail closed); platform rule PL02 gives the reason.
+
+# ---------- Regulatory decision table ----------
+# Evaluated per prescription item. The first matching row wins. No match means block (fail closed).
+# category matches if the drug belongs to that list.
+# context values: new_drug | refill (same drug previously prescribed to this patient by this doctor for this condition) | add_on (new drug for the same condition in a follow-up)
+regulatory_rules:
+  - { id: R01, category: prohibited, consult_type: any, mode: remote, context: any, outcome: block, reason: RX_PROHIBITED }
+  - { id: R02, category: any, consult_type: any, mode: in_person, context: any, outcome: allow, reason: null }   # the telemedicine lists do not govern in-person prescribing
+  - { id: R03, category: list_o, consult_type: first, mode: remote, context: any, outcome: allow, reason: null }
+  - { id: R04, category: list_a, consult_type: first, mode: video, context: new_drug, outcome: allow, reason: null }
+  - { id: R05, category: list_a, consult_type: first, mode: [audio, text], context: any, outcome: block, reason: RX_NEEDS_VIDEO_FIRST }
+  - { id: R06, category: list_o, consult_type: follow_up, mode: remote, context: any, outcome: allow, reason: null }
+  - { id: R07, category: list_a, consult_type: follow_up, mode: remote, context: refill, outcome: allow, reason: null }
+  - { id: R08, category: list_b, consult_type: follow_up, mode: remote, context: add_on, outcome: allow, reason: null }   # validate: true
+  - { id: R09, category: list_a, consult_type: follow_up, mode: video, context: [new_drug, add_on], outcome: allow, reason: null }   # same condition; video meets the List A first-prescription rule; validate: true
+  - { id: R10, category: list_a, consult_type: follow_up, mode: [audio, text], context: [new_drug, add_on], outcome: block, reason: RX_NEEDS_VIDEO_FIRST }   # add-on that is not in List B
+
+# ---------- Platform rules (stricter than the guidelines; product decisions) ----------
+platform_rules:
+  - { id: PL01, applies_to: prohibited, mode: in_person, outcome: block, reason: RX_PROHIBITED_IN_PRODUCT, decision: Q4, basis: "C13; product non-goal" }
+  - { id: PL02, applies_to: unclassified, mode: remote, outcome: block, reason: RX_NOT_CLASSIFIED, decision: Q1, basis: "fail closed until clinically classified" }
+  - { id: PL03, applies_to: [phenobarbitone, clobazam, clonazepam], mode: any, outcome: block, reason: RX_CONTROLLED_IN_PRODUCT, decision: Q11, basis: "NDPS psychotropics; allowed by AMD-2020-04 but kept off until the doctor reviewer decides" }
+
+# ---------- Prescription-level checks (all must pass before signing) ----------
+prescription_checks:
+  - { id: P01, check: doctor_verified_and_active, reason: RX_DOCTOR_NOT_VERIFIED }        # K-CS-01, C10
+  - { id: P02, check: patient_identity_confirmed_by_doctor, reason: RX_IDENTITY_NOT_CONFIRMED }
+  - { id: P03, check: patient_age_present, reason: RX_AGE_MISSING }
+  - { id: P04, check: teleconsult_consent_recorded, reason: RX_CONSENT_MISSING }          # implied (patient-initiated) or explicit
+  - { id: P05, check: diagnosis_or_provisional_diagnosis_present, reason: RX_DIAGNOSIS_MISSING }   # prescribing without one is misconduct
+  - { id: P06, check: follow_up_attestations_present_if_follow_up, reason: RX_FOLLOW_UP_NOT_ESTABLISHED }
+  - { id: P07, check: structured_dose_fields_complete, reason: RX_DOSE_INCOMPLETE }       # E-RX-02; never inferred (K-CS-03)
+  - { id: P08, check: doctor_reauthenticated_step_up, reason: RX_SIGNATURE_REQUIRED }      # K-SEC-03: proves WHO is signing
+  - { id: P09, check: prescription_signed_with_approved_signature_method, reason: RX_ESIGN_REQUIRED }   # C12, N5: authenticates the DOCUMENT
+  - { id: P10, check: patient_declared_in_india_for_remote_consult, reason: RX_PATIENT_OUTSIDE_INDIA }   # remote modes only; guidelines scope (R-02)
+# P08 and P09 are different things. Step-up authentication is not a signature.
+# P09 signs a hash of the final prescription with the method the lawyer approves under the IT Act 2000 (N5), e.g. an
+# electronic signature from a licensed eSign service provider or a Class 3 digital signature certificate. The signed
+# hash makes any later change detectable. Until N5 is decided, P09 blocks signing in production (fail closed).
+# Not in this ruleset, on purpose: allergy, interaction and dose-range checks. The guidelines do not require them,
+# and automated clinical checks are clinical decision support, which must go through the medical device software
+# assessment (docs/clinical/medical-device-software-assessment.md) before being added. Clinical appropriateness
+# stays the doctor's judgement.
+
+# What every evaluation stores (K-CS-05, auditability). Kept with the prescription under RET-02.
+audit:
+  store: [ruleset_version, drug_classification_version, item_inputs, rule_ids_matched, layer, outcome, reason, evaluated_at_utc]
+
+# ---------- Doctor's judgement (guideline duties the engine supports, but cannot decide) ----------
+doctor_judgement:
+  information_inadequate: doctor may end the consult without prescribing and ask for an in-person visit
+  emergency: doctor advises immediate care (country-pack emergency number) and refers; no prescription needed
+  consult_outcomes: [completed_with_prescription, completed_without_prescription, referred_in_person, emergency_referral]
+
+consent:
+  implied_when_initiator: [patient]
+  explicit_when_initiator: [doctor, caregiver, health_worker]
+  explicit_forms: [in_app_tap, recorded_audio_or_video_statement, text_message]
+  record_fields: [booking_id, initiator, consent_type, time_utc, channel]
+
+pharmacy_transmission:                  # guidelines: only with the patient's explicit consent
+  requires: explicit_patient_consent_per_prescription
+  v1: not_supported                     # the patient gets the signed PDF and shares it themselves; pharmacy is v3.0
+
+identification:
+  patient_required: [name, age]
+  patient_address: validate      # the guidelines list address among identity details; check whether it is mandatory or one option
+                                 # (official text). Collect it only if required (DPDP data minimisation).
+  patient_one_of: [verified_phone, email, government_id_other_than_aadhaar_number]   # C23; every account has an OTP-verified phone, so this adds no step
+  doctor_display: [name, qualification, registration_number, council]               # shown at start, on profile and on the prescription
+  minors:
+    v1: not_supported
+    basis: product_decision            # founder decision 3; NOT a legal prohibition. The guidelines allow minors with an accompanying adult (from v1.1)
+
+records:                                # doctor's duty, stored by the platform
+  keep: [consult_log, call_or_video_metadata, chat_transcript_if_text, images_shared, reports, prescription, consent_record, rule_evaluations]
+  video_recording: false
+  retention_rule: RET-02                # 3 years after the patient's last consult with that doctor, plus legal hold (docs/data-inventory-v1.0.md); validate: true
+
+# ---------- Messages (i18n keys; English text for review) ----------
+reasons:
+  RX_PROHIBITED:            { key: rx.block.prohibited,       en: "This medicine cannot be prescribed in an online consultation (Schedule X or NDPS)." }
+  RX_PROHIBITED_IN_PRODUCT: { key: rx.block.prohibited_product, en: "Schedule X and NDPS medicines cannot be prescribed in this app. Please use a paper prescription." }
+  RX_CONTROLLED_IN_PRODUCT: { key: rx.block.controlled_product, en: "This controlled medicine cannot be prescribed in this app yet. Please use a paper prescription." }
+  RX_NOT_CLASSIFIED:        { key: rx.block.not_classified,   en: "This medicine has not been classified for online prescribing yet. Ask the patient to visit, or choose another medicine." }
+  RX_NEEDS_VIDEO_FIRST:     { key: rx.block.needs_video,      en: "This medicine can be prescribed for the first time only in a video consultation. Switch to video or ask the patient to visit." }
+  RX_DOCTOR_NOT_VERIFIED:   { key: rx.block.doctor_unverified, en: "You can prescribe only when your registration is verified and active." }
+  RX_IDENTITY_NOT_CONFIRMED: { key: rx.block.identity,        en: "Confirm the patient's identity before signing." }
+  RX_AGE_MISSING:           { key: rx.block.age,              en: "Patient age is required on the prescription." }
+  RX_CONSENT_MISSING:       { key: rx.block.consent,          en: "The patient's consent to an online consultation is not recorded." }
+  RX_DIAGNOSIS_MISSING:     { key: rx.block.diagnosis,        en: "Add a diagnosis or provisional diagnosis before prescribing." }
+  RX_FOLLOW_UP_NOT_ESTABLISHED: { key: rx.block.follow_up,    en: "This counts as a follow-up only after an in-person visit with you in the last 6 months for the same condition." }
+  RX_DOSE_INCOMPLETE:       { key: rx.block.dose,             en: "Complete the dose, frequency and duration fields." }
+  RX_SIGNATURE_REQUIRED:    { key: rx.block.signature,        en: "Confirm your identity again to sign this prescription." }
+  RX_ESIGN_REQUIRED:        { key: rx.block.esign,            en: "Sign this prescription with your electronic signature to issue it." }
+  RX_PATIENT_OUTSIDE_INDIA: { key: rx.block.outside_india,    en: "Online consultations are only for patients who are in India. Ask the patient to visit the clinic when they are in India." }

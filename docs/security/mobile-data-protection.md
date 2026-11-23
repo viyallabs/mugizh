@@ -12,7 +12,7 @@
 | Data | Patient app | Pro app | Why |
 |---|---|---|---|
 | Tokens (access, refresh) | Keychain / Keystore only | Same | PER-K |
-| Next 72 h of reminder occurrences, with **neutral text** (medicine name only with P-MEDNAMES) | Yes, encrypted (offline backup, S-165, E-REM-02) | — | Reminders must fire offline |
+| Next 72 h of reminder occurrences, with **neutral text** (medicine name only with P-MEDNAMES) | Yes, encrypted (offline backup, S-165, E-REM-02) | — | Reminders must fire offline; from `GET /v1/me/reminders/device-schedule`, replaced whole on each fetch, each entry scheduled under its `replaceKey`, all cancelled when `remindersOn` is false, refetched on the silent `{"sync":"reminders"}` push (D-67, D-68) |
 | Recently viewed prescription and notes | Encrypted cache, cleared on sign-out and after 7 days unused [CONFIRM] | **No offline patient data.** Today's list shows names and times only, cleared at sign-out. | Minimise what a lost phone exposes |
 | Uploads in progress | Encrypted temp file, deleted after upload | — | — |
 | Anything else (search history, analytics) | Not stored | Not stored | — |
@@ -27,7 +27,7 @@
 |---|---|---|
 | App lock (biometric or device PIN) | **Optional, offered at first prescription; on by default** [CONFIRM] | **Mandatory** |
 | Auto-lock | After 5 min in the background | After 2 min in the background |
-| Remote sign-out (from another device or support) | Refresh token revoked; at next launch or push, the app wipes local data | Same |
+| Remote sign-out (from another device or support) | Refresh token revoked; at next launch, or on the silent `{"signout": <device ID>}` push the server sends that device (D-69; ignored unless the ID is its own, since the phone may have signed in again), the app wipes local data and cancels scheduled local notifications | Same |
 | Sign-out | Clears tokens, caches, local database, scheduled local notifications | Same |
 | Lost device | Patient uses "signed-in devices" (SC-52) | Doctor uses Pro web; MFA re-enrolment |
 

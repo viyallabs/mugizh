@@ -1,0 +1,7 @@
+# India drug classification (DRAFT). Built in S-126 by the clinical reviewer [CLINICAL].
+# FAIL CLOSED: an empty table blocks every drug. The rules engine allows a drug only when
+# it is classified here and the telemedicine rules allow that class (K-CS-02, K-CS-03).
+# Nothing is prescribable until S-126 and the doctor reviewer fill this table.
+version: 0.1.0-draft
+status: draft
+entries: []

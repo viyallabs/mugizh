@@ -1,0 +1,104 @@
+# Task v3 (https://taskfile.dev). Every Go command runs in the pinned dev image via tools/dev.sh (S-091),
+# because the founder's Windows laptop blocks unsigned Go tool binaries. CI runs the same commands (.gitlab-ci.yml).
+version: "3"
+
+vars:
+  DEV: tools/dev.sh
+  SPECTRAL_IMAGE: stoplight/spectral:6.15.0
+  GITLEAKS_IMAGE: zricethezav/gitleaks:v8.28.0
+
+tasks:
+  devimage:
+    desc: Build the pinned dev/CI tool image (Go, oapi-codegen, golangci-lint, gosec, govulncheck)
+    cmds:
+      - docker build -t mugizh-dev:1 -f tools/devimage/Dockerfile tools/devimage
+
+  fmt:
+    desc: Fail if any Go file is not gofmt-formatted (K-DOD-01)
+    cmds:
+      - |
+        out="$({{.DEV}} backend gofmt -l .; {{.DEV}} scheduler-core gofmt -l .)"
+        if [ -n "$out" ]; then echo "gofmt needed:"; echo "$out"; exit 1; fi
+
+  vet:
+    desc: go vet on backend and scheduler-core
+    cmds:
+      - "{{.DEV}} backend go vet ./..."
+
+      - |
+        if find scheduler-core -name "*.go" | grep -q .; then {{.DEV}} scheduler-core go vet ./...; fi
+
+  lint:
+    desc: gofmt + vet + golangci-lint (.golangci.yml)
+    cmds:
+      - task: fmt
+      - task: vet
+      - "{{.DEV}} backend golangci-lint run ./..."
+
+  test:
+    desc: All tests incl. integration (needs Docker for testcontainers)
+    cmds:
+      - "{{.DEV}} backend go test ./..."
+
+  test:unit:
+    desc: Unit tests only (-short)
+    cmds:
+      - "{{.DEV}} backend go test -short ./..."
+
+  archtest:
+    desc: Contract rules as tests (S-092)
+    cmds:
+      - "{{.DEV}} backend go test -count=1 ./archtest/..."
+
+  spectral:
+    desc: Prove the OpenAPI ruleset on its fixtures, then lint api/core and api/scheduler specs
+    cmds:
+      - tools/ci/spectral-fixtures.sh
+    env:
+      SPECTRAL_IMAGE: "{{.SPECTRAL_IMAGE}}"
+
+  spectral:fixtures:raw:
+    desc: The exact docker commands behind `spectral` (reference)
+    cmds:
+      - docker run --rm -v "$(pwd -W 2>/dev/null || pwd):/src" -w /src {{.SPECTRAL_IMAGE}} lint --ruleset docs/arch/openapi-lint.spectral.yaml --fail-severity error docs/arch/lint-fixtures/valid.core-api.v1.yaml
+      - docker run --rm -v "$(pwd -W 2>/dev/null || pwd):/src" -w /src {{.SPECTRAL_IMAGE}} lint --ruleset docs/arch/openapi-lint.spectral.yaml docs/arch/lint-fixtures/invalid.core-api.v1.yaml || true
+      - docker run --rm -v "$(pwd -W 2>/dev/null || pwd):/src" -w /src {{.SPECTRAL_IMAGE}} lint --ruleset docs/arch/openapi-lint.spectral.yaml docs/arch/lint-fixtures/scheduler-core.invalid.v1.yaml || true
+
+  gitleaks:
+    desc: Secret scan of the whole repo, then prove a planted secret is caught (S-091)
+    cmds:
+      - docker run --rm -v "$(pwd -W 2>/dev/null || pwd):/repo" -w /repo {{.GITLEAKS_IMAGE}} detect --source . --no-git --config .gitleaks.toml --no-banner
+      - tools/ci/planted-secret-test.sh
+    env:
+      MSYS_NO_PATHCONV: "1"
+
+  gosec:
+    desc: gosec static security scan (high severity and up fails)
+    cmds:
+      - "{{.DEV}} backend gosec -severity high -confidence medium -exclude-dir=archtest ./..."
+
+  govulncheck:
+    desc: Known-vulnerability scan of reachable dependencies (K-SEC-06)
+    cmds:
+      - "{{.DEV}} backend govulncheck ./..."
+
+  dast:
+    desc: OWASP ZAP API scan of every module spec, anonymous, as a patient and as a doctor (S-179; synthetic target, fakes only)
+    cmds:
+      - tools/ci/zap-scan.sh {{.CLI_ARGS}}
+
+  load:smoke:
+    desc: k6 smoke load test L1, L2, L3, L5, L11 against the assembled API (S-175 stand-in; synthetic target, fakes only)
+    cmds:
+      - tools/ci/load-smoke.sh {{.CLI_ARGS}}
+
+  ci:
+    desc: Everything CI runs, locally (lint, test, archtest, spectral, security)
+    cmds:
+      - task: lint
+      - task: test:unit
+      - task: archtest
+      - task: spectral
+      - task: gitleaks
+      - task: gosec
+      - task: govulncheck

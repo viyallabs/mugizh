@@ -79,6 +79,8 @@ Mode B: orders and refunds are created **on the clinic's own merchant account** 
 | Operation | Input → output | Data that leaves us | Timeout | Notes |
 |---|---|---|---|---|
 | `send` | deviceToken, platform, title key, body (already rendered and privacy-safe), data refs → providerMessageId | Device token, notification text | 3 s | Text follows K-DP-09: no diagnosis; medicine name only with the patient's opt-in. |
+| `send` (replaceKey) | optional display-replacement key (`rem-<minute>-c` or `-n`) | The key | — | S-165: a later notification with the same key replaces the earlier one on the device (the reminder push and the on-device backup for the same minute). Map it to the Android notification tag and the APNs collapse identifier, **never to the FCM collapse_key** (that makes the message collapsible and droppable while the device is offline). |
+| `send` (silent) | deviceToken, platform, data only (`{"sync":"reminders"}`, or `{"signout": <device ID>}` after a remote sign-out), no title, no body | Device token | 3 s | S-165: a content-free hint that the app should fetch its reminder schedule again, or wipe itself (D-69) (Android data message, APNs background push). The OS may delay or drop it, so it is never relied on. |
 | `invalidToken` (callback) | token → | — | — | Remove dead tokens |
 
 **Fallback:** SMS for reminder types where the patient allowed SMS. The app's local reminders are the last line (ADR-19).

@@ -1,0 +1,476 @@
+# scheduler-core API v1 (S-127). Source of truth (K-ARC-06): the handlers in scheduler-core/internal/api must match this file.
+# K-ARC-02: no health data. The only free-form strings are rrule and timeZone; everything else is an opaque UUID/ref, an
+# enum or a timestamp. Lint: api/.spectral.yaml (rule no-health-fields-in-scheduler).
+openapi: 3.1.0
+info:
+  title: scheduler-core API
+  version: 1.0.0
+  description: >
+    Recurring activities, their occurrences and due-event dispatch. Called only by the Core API with a service
+    credential, never by apps. Inputs are opaque references, RRULE strings and IANA time zones only.
+    Errors are RFC 9457 problem+json with a stable code. Every response carries Cache-Control no-store.
+  contact:
+    name: Platform team
+servers:
+  - url: https://scheduler.example.test
+tags:
+  - name: scheduler
+    description: scheduler-core activities and occurrences
+security:
+  - serviceToken: []
+paths:
+  /v1/activities:
+    post:
+      operationId: createActivity
+      summary: Create an activity
+      description: >
+        Creates a recurring activity and generates its occurrences 14 days ahead. Idempotency-Key (UUID) is required.
+        Same key and same body replays the stored activity with the Idempotent-Replayed header; same key with a
+        different body is 409 idempotency.key_reused. Unknown fields are rejected (K-ARC-02).
+      tags: [scheduler]
+      x-roles: [service]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActivityCreate' }
+      responses:
+        '201':
+          description: Created
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Activity' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /v1/activities/{activityId}:
+    parameters:
+      - $ref: '#/components/parameters/ActivityId'
+    get:
+      operationId: getActivity
+      summary: Get an activity
+      description: Returns the activity with an ETag for If-Match updates.
+      tags: [scheduler]
+      x-roles: [service]
+      x-ownership: none
+      responses:
+        '200':
+          description: The activity
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Activity' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: updateActivity
+      summary: Change an activity's time zone, rule or end
+      description: >
+        Requires If-Match. A change of timeZone, rrule or endsAt cancels all pending future occurrences and regenerates
+        them from now, with no duplicates and no gaps (E-REM-01, TC-39). Only active activities can be changed.
+      tags: [scheduler]
+      x-roles: [service]
+      x-ownership: none
+      parameters:
+        - { name: If-Match, in: header, required: true, description: ETag from the last read., schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActivityUpdate' }
+      responses:
+        '200':
+          description: Updated
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Activity' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '412': { $ref: '#/components/responses/Problem' }
+        '428': { $ref: '#/components/responses/Problem' }
+  /v1/activities/{activityId}/pause:
+    post:
+      operationId: pauseActivity
+      summary: Pause an activity
+      description: Cancels all pending occurrences. Naturally idempotent (pausing a paused activity succeeds).
+      tags: [scheduler]
+      x-roles: [service]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/ActivityId'
+        - $ref: '#/components/parameters/IdempotencyKeyOptional'
+      responses:
+        '200': { $ref: '#/components/responses/ActivityOK' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/activities/{activityId}/resume:
+    post:
+      operationId: resumeActivity
+      summary: Resume a paused activity
+      description: Regenerates occurrences from now to the 14-day horizon. Naturally idempotent.
+      tags: [scheduler]
+      x-roles: [service]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/ActivityId'
+        - $ref: '#/components/parameters/IdempotencyKeyOptional'
+      responses:
+        '200': { $ref: '#/components/responses/ActivityOK' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/activities/{activityId}/cancel:
+    post:
+      operationId: cancelActivity
+      summary: Cancel an activity
+      description: Terminal. Cancels all pending occurrences. Naturally idempotent.
+      tags: [scheduler]
+      x-roles: [service]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/ActivityId'
+        - $ref: '#/components/parameters/IdempotencyKeyOptional'
+      responses:
+        '200': { $ref: '#/components/responses/ActivityOK' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/occurrences:
+    get:
+      operationId: listOccurrences
+      summary: List a subject's occurrences
+      description: >
+        Cursor-paginated, ordered by dueAt then id. subjectRef is an opaque UUID, not personal data.
+        from is inclusive and to is exclusive.
+      tags: [scheduler]
+      x-roles: [service]
+      x-ownership: none
+      parameters:
+        - { name: subjectRef, in: query, required: true, description: Opaque subject UUID., schema: { type: string, format: uuid } }
+        - { name: from, in: query, required: false, description: Earliest dueAt (inclusive)., schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: false, description: Latest dueAt (exclusive)., schema: { type: string, format: date-time } }
+        - { name: limit, in: query, required: false, description: "Page size (default 20, maximum 100).", schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: cursor, in: query, required: false, description: Opaque cursor from nextCursor., schema: { type: string, maxLength: 200 } }
+      responses:
+        '200':
+          description: A page of occurrences
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Occurrence' }
+                  nextCursor:
+                    type: string
+                    description: Absent on the last page.
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /v1/occurrences/{occurrenceId}/acknowledge:
+    post:
+      operationId: acknowledgeOccurrence
+      summary: Mark an occurrence acknowledged
+      description: Allowed from pending or dispatched; acknowledging an acknowledged occurrence succeeds. A pending occurrence that is acknowledged is never dispatched.
+      tags: [scheduler]
+      x-roles: [service]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/OccurrenceId'
+        - $ref: '#/components/parameters/IdempotencyKeyOptional'
+      responses:
+        '200': { $ref: '#/components/responses/OccurrenceOK' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/occurrences/{occurrenceId}/actions:
+    post:
+      operationId: recordOccurrenceAction
+      summary: Record the subject's action on an occurrence (taken, skipped, snoozed)
+      description: >
+        S-154. The client sends its own clientActionId and the time the subject acted, so an action taken offline can
+        be synced later. The call is idempotent by clientActionId (a repeat with the same content returns the current
+        occurrence with Idempotent-Replayed: true; the same id with other content is idempotency.key_reused).
+        subjectRef must own the occurrence, otherwise the occurrence is not found. taken and skipped are final: the
+        first one wins, the same one again succeeds, a different one is occurrence.action_conflict. A final action is
+        accepted on a pending, dispatched, missed or failed occurrence. snoozed asks for one more notification after
+        snoozeMinutes (5 to 60, default 10), once at a time (occurrence.snooze_active), at most 3 times
+        (occurrence.snooze_limit), and only if it arrives within 15 minutes of actedAt. actedAt must not be more than
+        5 minutes in the future, nor more than 1 hour before the occurrence is due, nor more than 24 hours after it
+        (request.invalid, field actedAt out_of_range).
+      tags: [scheduler]
+      x-roles: [service]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/OccurrenceId'
+        - $ref: '#/components/parameters/IdempotencyKeyOptional'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OccurrenceAction' }
+      responses:
+        '200': { $ref: '#/components/responses/OccurrenceOK' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/occurrences/{occurrenceId}/miss:
+    post:
+      operationId: missOccurrence
+      summary: Mark a dispatched occurrence missed
+      description: Allowed from dispatched; marking a missed occurrence missed succeeds.
+      tags: [scheduler]
+      x-roles: [service]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/OccurrenceId'
+        - $ref: '#/components/parameters/IdempotencyKeyOptional'
+      responses:
+        '200': { $ref: '#/components/responses/OccurrenceOK' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/occurrences/{occurrenceId}/cancel:
+    post:
+      operationId: cancelOccurrence
+      summary: Cancel a pending occurrence
+      description: Allowed from pending; cancelling a cancelled occurrence succeeds.
+      tags: [scheduler]
+      x-roles: [service]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/OccurrenceId'
+        - $ref: '#/components/parameters/IdempotencyKeyOptional'
+      responses:
+        '200': { $ref: '#/components/responses/OccurrenceOK' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/subjects/{subjectRef}/erase:
+    post:
+      operationId: eraseSubject
+      summary: Erase everything held for a subject
+      description: >
+        K-DP-07. Deletes the subject, its activities, occurrences, idempotency records and unfinished queue jobs, and
+        reports counts. Naturally idempotent: erasing an unknown subject succeeds with zero counts.
+      tags: [scheduler]
+      x-roles: [service]
+      x-ownership: none
+      parameters:
+        - { name: subjectRef, in: path, required: true, description: Opaque subject UUID., schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/IdempotencyKeyOptional'
+      responses:
+        '200':
+          description: Erasure report
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErasureReport' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+components:
+  securitySchemes:
+    serviceToken:
+      type: http
+      scheme: bearer
+      description: Service credential held by the Core API. Compared in constant time against a hashed value; deny by default.
+  parameters:
+    ActivityId:
+      { name: activityId, in: path, required: true, description: Activity UUID., schema: { type: string, format: uuid } }
+    OccurrenceId:
+      { name: occurrenceId, in: path, required: true, description: Occurrence UUID., schema: { type: string, format: uuid } }
+    IdempotencyKeyRequired:
+      { name: Idempotency-Key, in: header, required: true, description: "Client-generated UUID, kept 24 hours.", schema: { type: string, format: uuid } }
+    IdempotencyKeyOptional:
+      { name: Idempotency-Key, in: header, required: false, description: "Accepted and ignored: the operation is naturally idempotent.", schema: { type: string, format: uuid } }
+  headers:
+    ETag:
+      description: Version tag of the activity, for If-Match.
+      schema: { type: string }
+  responses:
+    Problem:
+      description: Error (RFC 9457 problem+json)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    ActivityOK:
+      description: The activity
+      headers:
+        ETag: { $ref: '#/components/headers/ETag' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Activity' }
+    OccurrenceOK:
+      description: The occurrence
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Occurrence' }
+  schemas:
+    ActivityCreate:
+      type: object
+      additionalProperties: false
+      required: [subjectRef, appRef, externalRef, typeKey, rrule, timeZone, startsAt]
+      properties:
+        subjectRef:
+          type: string
+          format: uuid
+          description: Opaque subject UUID.
+        appRef:
+          type: string
+          maxLength: 32
+          pattern: '^[a-z][a-z0-9_-]*$'
+          description: Owning app key, for example core.
+        externalRef:
+          type: string
+          maxLength: 128
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$'
+          description: Opaque reference in the owning app (for example a prescription item ID).
+        typeKey: { $ref: '#/components/schemas/TypeKey' }
+        rrule:
+          type: string
+          maxLength: 512
+          description: RFC 5545 RRULE without DTSTART, expanded in timeZone local time.
+        timeZone:
+          type: string
+          maxLength: 64
+          description: IANA time zone name.
+        startsAt:
+          type: string
+          format: date-time
+          description: First occurrence (DTSTART); its local wall time in timeZone anchors the rule.
+        endsAt:
+          type: string
+          format: date-time
+          description: No occurrence is generated after this instant.
+    ActivityUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        timeZone:
+          type: string
+          maxLength: 64
+        rrule:
+          type: string
+          maxLength: 512
+        endsAt:
+          type: string
+          format: date-time
+    Activity:
+      type: object
+      required: [id, subjectRef, appRef, externalRef, typeKey, rrule, timeZone, startsAt, state, generatedThroughAt, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        subjectRef: { type: string, format: uuid }
+        appRef: { type: string }
+        externalRef: { type: string }
+        typeKey: { $ref: '#/components/schemas/TypeKey' }
+        rrule: { type: string }
+        timeZone: { type: string }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        state: { $ref: '#/components/schemas/ActivityState' }
+        generatedThroughAt: { type: string, format: date-time, description: Occurrences exist up to this instant. }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Occurrence:
+      type: object
+      required: [id, activityId, subjectRef, externalRef, typeKey, timeZone, dueAt, state, snoozeCount]
+      properties:
+        id: { type: string, format: uuid }
+        activityId: { type: string, format: uuid }
+        subjectRef: { type: string, format: uuid }
+        externalRef: { type: string }
+        typeKey: { $ref: '#/components/schemas/TypeKey' }
+        timeZone: { type: string, description: "The activity's IANA time zone." }
+        dueAt: { type: string, format: date-time }
+        state: { $ref: '#/components/schemas/OccurrenceState' }
+        dispatchedAt: { type: string, format: date-time }
+        acknowledgedAt: { type: string, format: date-time }
+        action: { type: string, enum: [taken, skipped], description: The final action the subject recorded. }
+        actedAt: { type: string, format: date-time, description: When the subject acted (as sent by the client). }
+        notifyAt: { type: string, format: date-time, description: When a snoozed occurrence is notified again. }
+        snoozeCount: { type: integer, description: How many times the occurrence was snoozed. }
+    OccurrenceAction:
+      type: object
+      additionalProperties: false
+      required: [clientActionId, subjectRef, action, actedAt]
+      properties:
+        clientActionId: { type: string, format: uuid, description: Client-generated id; makes the call idempotent. }
+        subjectRef: { type: string, format: uuid, description: Opaque subject UUID that must own the occurrence. }
+        action: { type: string, enum: [taken, skipped, snoozed] }
+        actedAt: { type: string, format: date-time, description: When the subject acted. }
+        snoozeMinutes: { type: integer, minimum: 5, maximum: 60, description: "snoozed only; default 10." }
+    ErasureReport:
+      type: object
+      required: [subjects, activities, occurrences, queueJobs]
+      properties:
+        subjects: { type: integer }
+        activities: { type: integer }
+        occurrences: { type: integer }
+        queueJobs: { type: integer }
+    TypeKey:
+      type: string
+      enum: [med.dose, injection.dose, test.due, appointment, custom]
+    ActivityState:
+      type: string
+      enum: [active, paused, ended, cancelled]
+    OccurrenceState:
+      type: string
+      enum: [pending, dispatched, acknowledged, missed, cancelled, failed]
+    Problem:
+      type: object
+      description: >
+        RFC 9457 problem details. Besides the members below the body carries the standard type, title, detail and
+        instance members (fixed, health-free English text for developers; apps branch on code).
+      additionalProperties: true
+      required: [status, code]
+      properties:
+        status: { type: integer }
+        code:
+          type: string
+          enum:
+            - auth.unauthenticated
+            - request.invalid
+            - request.too_large
+            - resource.not_found
+            - resource.conflict
+            - resource.precondition_failed
+            - precondition.required
+            - idempotency.key_required
+            - idempotency.key_reused
+            - activity.rrule_invalid
+            - activity.time_zone_invalid
+            - activity.invalid_state
+            - occurrence.invalid_state
+            - occurrence.action_conflict
+            - occurrence.snooze_active
+            - occurrence.snooze_limit
+            - server.error
+            - server.unavailable
+        traceId: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                enum: [subjectRef, appRef, externalRef, typeKey, rrule, timeZone, startsAt, endsAt, limit, cursor, from, to, body, clientActionId, action, actedAt, snoozeMinutes]
+              code:
+                type: string
+                enum: [required, invalid, unknown_field, too_long, out_of_range]

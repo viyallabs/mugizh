@@ -1,0 +1,603 @@
+openapi: 3.1.0
+info:
+  title: Core API — directory (profiles, practices, search)
+  version: 1.0.0
+  description: |
+    Doctor and clinic profiles, practices and radius search (S-112, S-117, S-119, S-120, S-162).
+    Only Verified doctors at Verified clinics are ever listed or searchable (K-CS-01); anything
+    else answers 404. Search ranking is never paid (CD-05, K-CS-08): distance and availability
+    only, verification is a gate. The search location travels in the request body, is used for
+    the query and is never stored or logged (RET-12). Clients must not send an Idempotency-Key
+    on search. Every management operation declares x-roles and is ownership-checked: others'
+    resources answer 404 (K-SEC-04). Fees are integer minor units with the currency from the
+    country pack; `fee.version` changes whenever the amount changes, so a booking can copy the
+    fee it saw.
+tags:
+  - name: directory
+    description: Profiles, clinics, practices, search
+paths:
+  /v1/practices/search:
+    post:
+      operationId: searchPractices
+      tags: [directory]
+      summary: Find listed practices near a point or a PIN code (location in the body, never stored)
+      x-roles: [public]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SearchRequest' }
+      responses:
+        '200':
+          description: Practices, nearest first (ties rotate daily); distance rounded to 0.1 km
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SearchResult' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /v1/practices/{practiceId}:
+    get:
+      operationId: getPractice
+      tags: [directory]
+      summary: Public profile of a listed practice (unverified or unknown answers 404)
+      x-roles: [public]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/PracticeId'
+      responses:
+        '200':
+          description: Profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PracticeProfile' }
+        '404': { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: updatePractice
+      tags: [directory]
+      summary: Change a practice (the doctor's own, or one at the caller's clinic)
+      x-roles: [doctor, clinic_admin]
+      x-ownership: practice
+      parameters:
+        - $ref: '#/components/parameters/PracticeId'
+        - $ref: '#/components/parameters/ClinicHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PracticeUpdate' }
+      responses:
+        '200':
+          description: Updated practice
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ManagedPractice' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/me/professional:
+    put:
+      operationId: upsertMyProfessional
+      tags: [directory]
+      summary: Create or change my doctor profile (listed only once I am Verified)
+      x-roles: [doctor]
+      x-ownership: self
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProfessionalProfile' }
+      responses:
+        '200':
+          description: Saved profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ManagedProfessional' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /v1/clinics:
+    post:
+      operationId: submitClinic
+      tags: [directory]
+      summary: Submit a clinic; the caller becomes its clinic admin. Listed only after verification
+      x-roles: [authenticated]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClinicSubmission' }
+      responses:
+        '201':
+          description: Submitted (not listed yet)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ManagedClinic' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/clinics/{clinicId}/practices:
+    post:
+      operationId: createPractice
+      tags: [directory]
+      summary: Add a doctor's practice at my clinic
+      x-roles: [clinic_admin]
+      x-ownership: clinic
+      parameters:
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/ClinicHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PracticeCreate' }
+      responses:
+        '201':
+          description: Created (listed only once doctor and clinic are Verified)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ManagedPractice' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/clinics/{clinicId}/branches:
+    get:
+      operationId: listBranches
+      tags: [directory]
+      summary: The branches of my clinic (main branch first; a clinic has at most 50, so one page)
+      x-roles: [clinic_admin]
+      x-ownership: clinic
+      parameters:
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/ClinicHeader'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Branches
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BranchList' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createBranch
+      tags: [directory]
+      summary: Add a branch location to my clinic (each branch is located separately)
+      x-roles: [clinic_admin]
+      x-ownership: clinic
+      parameters:
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/ClinicHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BranchCreate' }
+      responses:
+        '201':
+          description: Created (listed while the clinic is Verified)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ManagedBranch' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/clinics/{clinicId}/branches/{branchId}:
+    patch:
+      operationId: updateBranch
+      tags: [directory]
+      summary: Change a branch of my clinic (address, pin, zone, name, on or off)
+      x-roles: [clinic_admin]
+      x-ownership: clinic
+      parameters:
+        - $ref: '#/components/parameters/ClinicId'
+        - $ref: '#/components/parameters/BranchId'
+        - $ref: '#/components/parameters/ClinicHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BranchUpdate' }
+      responses:
+        '200':
+          description: Updated branch
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ManagedBranch' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /v1/me/practice-invitations:
+    get:
+      operationId: listMyPracticeInvitations
+      tags: [directory]
+      summary: My pending invitations (a clinic naming me lead doctor, or listing me at its practice)
+      x-roles: [doctor]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Pending invitations, oldest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/PracticeInvitation' }
+                  nextCursor: { type: string }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /v1/me/practice-invitations/{invitationId}/accept:
+    post:
+      operationId: acceptPracticeInvitation
+      tags: [directory]
+      summary: Accept an invitation. Until then it never counts for listing
+      x-roles: [doctor]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/InvitationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Accepted }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/me/practice-invitations/{invitationId}/decline:
+    post:
+      operationId: declinePracticeInvitation
+      tags: [directory]
+      summary: Decline an invitation
+      x-roles: [doctor]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/InvitationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Declined }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, format: uuid }
+    ClinicHeader:
+      name: X-Clinic-Id
+      in: header
+      required: false
+      description: Which clinic to act for, when the caller administers more than one
+      schema: { type: string, format: uuid }
+    PracticeId:
+      name: practiceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ClinicId:
+      name: clinicId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    BranchId:
+      name: branchId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string, maxLength: 200 }
+    InvitationId:
+      name: invitationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    Problem:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string }
+        detail: { type: string }
+        instance: { type: string }
+        traceId: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, code]
+            properties:
+              field: { type: string }
+              code: { type: string }
+    ConsultMode:
+      type: string
+      enum: [in_person, video, audio]
+      x-extensible-enum: true
+    GeoPoint:
+      type: object
+      additionalProperties: false
+      required: [lat, lng]
+      properties:
+        lat: { type: number, format: double, minimum: -90, maximum: 90 }
+        lng: { type: number, format: double, minimum: -180, maximum: 180 }
+    Fee:
+      type: object
+      required: [amount, currency, version, updatedAt]
+      properties:
+        amount: { type: integer, format: int64, minimum: 0, description: Minor units of the currency }
+        currency: { type: string, description: Currency code from the country pack }
+        version: { type: string, description: Changes whenever the amount changes; bookings copy it }
+        updatedAt: { type: string, format: date-time }
+    SearchRequest:
+      type: object
+      additionalProperties: false
+      description: Give exactly one of location or postalCode.
+      properties:
+        location: { $ref: '#/components/schemas/GeoPoint' }
+        postalCode: { type: string, maxLength: 12 }
+        radiusKm: { type: number, format: double, minimum: 0.1, description: Defaults and maximum come from configuration }
+        specialty: { type: string, maxLength: 40 }
+        mode: { $ref: '#/components/schemas/ConsultMode' }
+        minFee: { type: integer, format: int64, minimum: 0 }
+        maxFee: { type: integer, format: int64, minimum: 0 }
+        availableWithinDays: { type: integer, minimum: 1, maximum: 60, description: Needs booking data; refused until it exists }
+        limit: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        cursor: { type: string, maxLength: 300 }
+    SearchResult:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/SearchItem' }
+        nextCursor: { type: string }
+    ProfessionalCard:
+      type: object
+      required: [professionalId, displayName, specialtyLabelKey, languages]
+      properties:
+        professionalId: { type: string, format: uuid }
+        displayName: { type: string }
+        specialty: { type: string, description: Present only with a recognised postgraduate qualification }
+        specialtyLabelKey: { type: string, description: Translation key (K-GLB-02) }
+        languages:
+          type: array
+          items: { type: string }
+        photoRef: { type: string }
+    PracticeInvitation:
+      type: object
+      required: [invitationId, kind, clinicId, clinicName, status, createdAt]
+      properties:
+        invitationId: { type: string, format: uuid }
+        kind: { type: string, enum: [practice, clinic_lead], x-extensible-enum: true }
+        clinicId: { type: string, format: uuid }
+        clinicName: { type: string }
+        practiceId: { type: string, format: uuid }
+        status: { type: string, enum: [pending_doctor], x-extensible-enum: true }
+        createdAt: { type: string, format: date-time }
+    ClinicCard:
+      type: object
+      description: A clinic at one branch; address and location are those of the branch (each branch is located separately)
+      required: [clinicId, name, branchId, branchName, address, location]
+      properties:
+        clinicId: { type: string, format: uuid }
+        name: { type: string }
+        branchId: { type: string, format: uuid }
+        branchName: { type: string }
+        address: { type: string }
+        location: { $ref: '#/components/schemas/GeoPoint' }
+    SearchItem:
+      type: object
+      required: [practiceId, professional, clinic, modes, fee, distanceKm, verified]
+      properties:
+        practiceId: { type: string, format: uuid }
+        professional: { $ref: '#/components/schemas/ProfessionalCard' }
+        clinic: { $ref: '#/components/schemas/ClinicCard' }
+        modes:
+          type: array
+          items: { $ref: '#/components/schemas/ConsultMode' }
+        fee: { $ref: '#/components/schemas/Fee' }
+        distanceKm: { type: number, format: double, description: Rounded to 0.1 km }
+        verified: { type: boolean, description: Always true; unverified practices are never returned }
+    PracticeProfile:
+      type: object
+      required: [practiceId, professional, clinic, modes, fee, timings, timeZone, verification, qualifications]
+      properties:
+        practiceId: { type: string, format: uuid }
+        professional: { $ref: '#/components/schemas/ProfessionalCard' }
+        clinic: { $ref: '#/components/schemas/ClinicCard' }
+        modes:
+          type: array
+          items: { $ref: '#/components/schemas/ConsultMode' }
+        fee: { $ref: '#/components/schemas/Fee' }
+        timings: { type: string }
+        timeZone: { type: string, description: IANA zone of the branch }
+        qualifications:
+          type: array
+          description: Recognised qualifications only
+          items: { type: string }
+        verification:
+          type: object
+          required: [verified, checks]
+          properties:
+            verified: { type: boolean }
+            verifiedAt: { type: string, format: date-time }
+            checks:
+              type: array
+              description: Codes of what was checked (S-161); empty until the verification module supplies them
+              items: { type: string }
+    ProfessionalProfile:
+      type: object
+      additionalProperties: false
+      required: [displayName, languages]
+      properties:
+        displayName: { type: string, minLength: 2, maxLength: 80 }
+        specialty: { type: string, maxLength: 40, description: Accepted only if a recognised postgraduate qualification for it is recorded (RG-04) }
+        languages:
+          type: array
+          maxItems: 10
+          items: { type: string, maxLength: 40 }
+        photoRef: { type: string, maxLength: 36, pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", description: Opaque ID of an uploaded plain head-and-shoulders photo (never a path or URL) }
+    ManagedProfessional:
+      type: object
+      required: [professionalId, displayName, specialtyLabelKey, languages, listed]
+      properties:
+        professionalId: { type: string, format: uuid }
+        displayName: { type: string }
+        specialty: { type: string }
+        specialtyLabelKey: { type: string }
+        languages:
+          type: array
+          items: { type: string }
+        photoRef: { type: string }
+        listed: { type: boolean, description: Whether this doctor is currently Verified }
+    ClinicSubmission:
+      type: object
+      additionalProperties: false
+      description: Give an address to be located, or a manual pin, or both (the pin wins).
+      required: [name, address, leadDoctorId]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        address: { type: string, minLength: 5, maxLength: 300 }
+        pin: { $ref: '#/components/schemas/GeoPoint' }
+        timeZone: { type: string, maxLength: 64, description: IANA zone; defaults to the country pack's zone }
+        leadDoctorId: { type: string, format: uuid }
+        registrationDocRef: { type: string, maxLength: 36, pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", description: Opaque ID of the uploaded registration document }
+        hfrId: { type: string, maxLength: 30 }
+    ManagedClinic:
+      type: object
+      required: [clinicId, name, address, location, locationSource, leadDoctorId, listed]
+      properties:
+        clinicId: { type: string, format: uuid }
+        name: { type: string }
+        address: { type: string }
+        location: { $ref: '#/components/schemas/GeoPoint' }
+        locationSource: { type: string, enum: [geocoded, manual_pin], x-extensible-enum: true }
+        leadDoctorId: { type: string, format: uuid }
+        listed: { type: boolean, description: True only when the clinic and its lead doctor are Verified and the lead doctor has accepted }
+    PracticeCreate:
+      type: object
+      additionalProperties: false
+      required: [doctorId, modes, feeAmount]
+      properties:
+        doctorId: { type: string, format: uuid }
+        branchId: { type: string, format: uuid, description: The branch of my clinic; defaults to the main branch }
+        modes:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/ConsultMode' }
+        feeAmount: { type: integer, format: int64, minimum: 0, description: Minor units; the currency is the country pack's }
+        timings: { type: string, maxLength: 200, description: Plain opening times, not marketing text }
+    PracticeUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        modes:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/ConsultMode' }
+        feeAmount: { type: integer, format: int64, minimum: 0 }
+        timings: { type: string, maxLength: 200 }
+        active: { type: boolean, description: false takes the practice out of search }
+    ManagedPractice:
+      type: object
+      required: [practiceId, doctorId, clinicId, branchId, modes, fee, timings, active, listed]
+      properties:
+        practiceId: { type: string, format: uuid }
+        doctorId: { type: string, format: uuid }
+        clinicId: { type: string, format: uuid }
+        branchId: { type: string, format: uuid }
+        modes:
+          type: array
+          items: { $ref: '#/components/schemas/ConsultMode' }
+        fee: { $ref: '#/components/schemas/Fee' }
+        timings: { type: string }
+        active: { type: boolean }
+        listed: { type: boolean }
+    BranchCreate:
+      type: object
+      additionalProperties: false
+      description: Give an address to be located, or a manual pin, or both (the pin wins). The location needs the same accuracy as a clinic address.
+      required: [name, address]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        address: { type: string, minLength: 5, maxLength: 300 }
+        pin: { $ref: '#/components/schemas/GeoPoint' }
+        timeZone: { type: string, maxLength: 64, description: IANA zone of this branch; defaults to the zone of the clinic }
+    BranchUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        address: { type: string, minLength: 5, maxLength: 300, description: Located again unless a pin is given }
+        pin: { $ref: '#/components/schemas/GeoPoint' }
+        timeZone: { type: string, maxLength: 64 }
+        active: { type: boolean, description: false takes the branch and its practices out of search; the main branch cannot be switched off }
+    ManagedBranch:
+      type: object
+      required: [branchId, clinicId, name, address, location, locationSource, timeZone, main, active, listed]
+      properties:
+        branchId: { type: string, format: uuid }
+        clinicId: { type: string, format: uuid }
+        name: { type: string }
+        address: { type: string }
+        location: { $ref: '#/components/schemas/GeoPoint' }
+        locationSource: { type: string, enum: [geocoded, manual_pin], x-extensible-enum: true }
+        timeZone: { type: string }
+        main: { type: boolean }
+        active: { type: boolean }
+        listed: { type: boolean, description: True only while the branch is active and its clinic and lead doctor are Verified }
+    BranchList:
+      type: object
+      required: [items]
+      properties:
+        nextCursor: { type: string }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ManagedBranch' }

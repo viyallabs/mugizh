@@ -1,0 +1,10 @@
+# Spectral entry point for api/ (S-092, K-ARC-06). The rules live in docs/arch/openapi-lint.spectral.yaml (S-038).
+# Spectral does not apply `overrides` of an extended ruleset, so the scheduler-core override is repeated here:
+# every spec under api/scheduler/ (and any scheduler-core*.yaml fixture) must pass no-health-fields-in-scheduler (K-ARC-02).
+extends:
+  - ../docs/arch/openapi-lint.spectral.yaml
+
+overrides:
+  - files: ["scheduler/**/*.yaml", "**/scheduler-core*.yaml"]
+    rules:
+      no-health-fields-in-scheduler: error

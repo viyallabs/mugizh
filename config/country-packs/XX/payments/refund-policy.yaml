@@ -1,0 +1,39 @@
+# Synthetic refund policy for test country XX. Same structure as a real pack, different values, so that core
+# code that hard-codes India values fails the tests (TC-53).
+policy_id: XX-REFUND
+version: 1.0.0
+status: approved
+currency: EUR
+clinic_override: more_generous_only
+
+windows:
+  free_cancel_before_minutes: 60
+  free_reschedules: 2
+  patient_grace_minutes: 7
+  doctor_join_timeout_minutes: 12
+  pending_payment_timeout_minutes: 20
+  conversion_credit_days: 5
+
+rules:
+  - { id: RF01, trigger: payment_debited_booking_failed, applies_to: any,    refund_pct: 100, auto: true }
+  - { id: RF02, trigger: duplicate_payment,             applies_to: any,    refund_pct: 100, auto: true }
+  - { id: RF03, trigger: doctor_not_joined,             applies_to: online, refund_pct: 100, auto: true }
+  - { id: RF04, trigger: clinic_or_doctor_cancelled,    applies_to: any,    refund_pct: 100, auto: true, alt: free_reschedule }
+  - { id: RF05, trigger: technical_failure_recorded,    applies_to: online, refund_pct: 100, auto: true, alt: free_reschedule }
+  - { id: RF06, trigger: converted_to_in_person,        applies_to: online, refund_pct: 40,  auto: true, alt: credit_to_in_person_visit }
+  - { id: RF07, trigger: patient_cancelled, before_minutes_gte: 60, applies_to: any, refund_pct: 100, auto: true }
+  - { id: RF08, trigger: patient_cancelled, before_minutes_lt: 60,  applies_to: any, refund_pct: 0,   auto: false, blocked_by: FAIRNESS-01 }
+  - { id: RF09, trigger: patient_no_show,               applies_to: any,    refund_pct: 0,   auto: false, blocked_by: FAIRNESS-01 }
+
+refund_execution:
+  start_within_minutes: 45
+  destination: original_payment_method
+  settlement_mode_clinic_collected: refund_from_clinic_account_via_partner_api
+  on_refund_failure: [alert_clinic, open_grievance_ticket]
+  show_patient: [status, reference_number, expected_days]
+
+display_before_payment:
+  - seller_is_clinic
+  - full_fee_no_extra_charges
+  - refund_summary_with_version
+  - grievance_contact

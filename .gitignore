@@ -1,0 +1,50 @@
+# Secrets and local env (K-SEC-05): never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+secrets/
+
+# Go
+/backend/bin/
+/scheduler-core/bin/
+*.test
+*.out
+coverage.*
+go.work.sum
+
+# Node / pnpm / React Native / Next.js (apps arrive after UI/UX sign-off)
+node_modules/
+.pnpm-store/
+.next/
+dist/
+build/
+.expo/
+ios/Pods/
+android/.gradle/
+*.apk
+*.aab
+*.ipa
+
+# OpenTofu / Terraform state (S-093): state lives in the remote backend only
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local data (synthetic only, never real patient data)
+/tmp/
+/.data/
+deploy/local/.secrets/

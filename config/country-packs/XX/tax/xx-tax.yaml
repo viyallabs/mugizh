@@ -1,0 +1,10 @@
+# Synthetic tax configuration for test country XX.
+version: 1.0.0
+status: approved
+vat:
+  rate_pct: 23
+receipts:
+  registered_clinic: invoice
+  unregistered_clinic: receipt
+financial_year_start_month: 1        # calendar year: exercises the "CY" document number series
+registration_id_pattern: '^XX[0-9]{9}$'

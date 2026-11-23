@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS processed_event;
+DROP TABLE IF EXISTS event_outbox;
+DROP TABLE IF EXISTS mfa_factor;
+DROP TABLE IF EXISTS sign_in_lock;
+DROP TABLE IF EXISTS otp_counter;
+DROP TABLE IF EXISTS otp_challenge;
+DROP TABLE IF EXISTS session;
+DROP TABLE IF EXISTS device;
+DROP TABLE IF EXISTS role_assignment;
+DROP TABLE IF EXISTS user_account;

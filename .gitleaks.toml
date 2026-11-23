@@ -1,0 +1,13 @@
+# Gitleaks config (S-091, K-SEC-05). Extends the default rules; never loosen them.
+# backend/, scheduler-core/, config/, api/, tools/ and infra are NEVER allow-listed.
+# Do NOT add `paths` to an allowlist: gitleaks then skips whole files from scanning, not just the finding.
+title = "mugizh gitleaks"
+
+[extend]
+useDefault = true
+
+# One documented false positive in prose: the phrase 'S3-compatible storage' trips generic-api-key
+# (docs/arch/infrastructure-and-environments.md). Matched on the secret text itself, not on a path.
+[[allowlists]]
+description = "'S3-compatible' in docs prose is not a secret"
+regexes = ['''S3-compatible''']

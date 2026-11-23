@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS destruction_log;
+DROP TABLE IF EXISTS data_key;
+DROP TABLE IF EXISTS key_ref;

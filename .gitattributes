@@ -1,0 +1,9 @@
+# Line endings: LF everywhere. Country-pack files are checksummed byte for byte (S-099),
+# so a CRLF checkout would make the loader refuse to start.
+* text=auto eol=lf
+config/** text eol=lf
+*.sql text eol=lf
+*.go text eol=lf
+*.xlsx binary
+*.png binary
+*.pdf binary

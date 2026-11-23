@@ -54,3 +54,21 @@
 | New targets (section 2) | ☐ Agree ☐ Change: |
 | Low-end device definition for the cold-start target | |
 | Name / date | |
+
+## 5. S-068 prototype results: reminder dispatch on River (scheduler-core)
+
+**Measured 2026-11-17** by `TestS068Prototype` in `scheduler-core/internal/itest/s068_test.go` (S-127, S-140). **Machine caveat: a founder's Windows 11 laptop (12 logical CPUs, 8 GB given to Docker). PostgreSQL 17 in a container, the scheduler, the load generator and the fake receiver all share it.** Production numbers on separate hosts are expected to be better, but this is **not** a production measurement and the target stays "to be confirmed on staging" until S-175 runs it there. Synthetic data only.
+
+**Design measured.** Occurrences live in PostgreSQL (`scheduler.occurrences`). A scanner (every 250 ms, safe to run on several instances with `FOR UPDATE SKIP LOCKED`) claims due occurrences in batches of 1,000 and inserts one River job each, in the same transaction as the claim. 200 River workers sign the payload (HMAC-SHA-256), POST it to the receiver (which verifies every signature), then mark the occurrence `dispatched`. Lateness is `dispatched_at - due_at` read from the database. The receiver is in the same process, so network latency to the Core API is not included.
+
+**Traffic model** (load-test-plan L7): 1M reminders a day, three peaks a day. If a peak carries 25% of the day in 10 minutes, that is about **417 a second**. The burst runs are far beyond that model.
+
+| Run | Occurrences | Spread | Lateness p50 / p99 / p99.9 / max | Within 60 s | Throughput |
+|---|---|---|---|---|---|
+| Steady peak (model) | 50,000 | 120 s (417/s) | 0.23 s / 0.37 s / 0.40 s / 0.46 s | 100.000% | 416/s (equal to the arrival rate) |
+| Burst | 100,000 | 10 s (10,000/s) | 16.5 s / 31.6 s / 31.8 s / 31.8 s | 100.000% | about 2,400 to 3,100/s |
+| Burst (stress) | 200,000 | 10 s (20,000/s) | 41.3 s / 82.3 s / 82.8 s / 82.9 s | **72.3% (fails)** | about 2,150/s |
+
+**Reading it.** One scheduler instance on this laptop drains about 2,200 to 3,000 reminders a second. That is **5 to 7 times the modelled peak** (417/s). The 60-second objective holds for a burst of up to roughly 130,000 reminders due in the same few seconds (13% of a day's volume at one instant); beyond that a single instance falls behind, as the 200,000 run shows. Extra instances add capacity because claiming uses `SKIP LOCKED`; that was **not** measured. A 24-hour soak (L7 is a soak test) was **not** run.
+
+**Verdict on River (ADR-07): suitable for v1.0.** It carried the modelled load with large headroom, retries with backoff, cancels cleanly and needs no extra infrastructure. Cost to know about: every delivery is two small queries on top of River's own bookkeeping, so PostgreSQL is the ceiling. If production peaks ever exceed what one instance drains, add instances first, then batch the `dispatched` updates. No change to the decision is proposed. [CONFIRM] the founder's sign-off, and re-run on staging hardware.

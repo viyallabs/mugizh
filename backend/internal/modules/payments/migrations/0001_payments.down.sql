@@ -1,0 +1,15 @@
+DROP TABLE IF EXISTS processed_event;
+DROP TABLE IF EXISTS event_outbox;
+DROP TABLE IF EXISTS reconciliation_run;
+DROP TABLE IF EXISTS payment_alert;
+DROP TABLE IF EXISTS ops_ticket;
+DROP VIEW IF EXISTS ledger_balance;
+DROP TABLE IF EXISTS ledger_entry;
+DROP TABLE IF EXISTS ledger_txn;
+DROP FUNCTION IF EXISTS ledger_append_only();
+DROP FUNCTION IF EXISTS ledger_assert_balanced();
+DROP TABLE IF EXISTS refund;
+DROP TABLE IF EXISTS webhook_event;
+DROP TABLE IF EXISTS payment_attempt;
+DROP TABLE IF EXISTS payment_order;
+DROP TABLE IF EXISTS clinic_merchant_link;

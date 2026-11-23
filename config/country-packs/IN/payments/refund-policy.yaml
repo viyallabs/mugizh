@@ -1,0 +1,53 @@
+# Refund and cancellation policy (DRAFT) — story S-019, contract K-PAY-05
+# One versioned policy, shown to the patient before payment and stored with each booking (policy_id + version).
+# Belongs in the India country pack (config/country-packs/IN/payments/) once S-099 exists. No values in code (K-GLB-01).
+# All values marked [CONFIRM] need founder approval; fairness rule needs lawyer check (E-Commerce Rules 2020).
+
+policy_id: IN-REFUND
+version: 1.0.0-draft
+status: draft                 # draft -> approved
+currency: INR
+clinic_override: more_generous_only   # a clinic may relax windows or raise refund %, never tighten (v1.0)
+
+windows:
+  free_cancel_before_minutes: 120       # [CONFIRM] patient cancels >= 2 h before slot start
+  free_reschedules: 1                   # [CONFIRM]
+  patient_grace_minutes: 10             # E-BK-05
+  doctor_join_timeout_minutes: 10       # E-BK-04
+  pending_payment_timeout_minutes: 15   # E-PAY-01
+  conversion_credit_days: 7             # [CONFIRM] online -> in-person credit
+
+# First matching rule wins. refund_pct is of the amount the patient paid.
+rules:
+  - { id: RF01, trigger: payment_debited_booking_failed, applies_to: any,       refund_pct: 100, auto: true,  ref: E-PAY-02 }
+  - { id: RF02, trigger: duplicate_payment,             applies_to: any,       refund_pct: 100, auto: true,  ref: E-PAY-03 }
+  - { id: RF03, trigger: doctor_not_joined,             applies_to: online,    refund_pct: 100, auto: true,  ref: E-BK-04 }
+  - { id: RF04, trigger: clinic_or_doctor_cancelled,    applies_to: any,       refund_pct: 100, auto: true,  alt: free_reschedule, ref: "E-BK-06, E-VER-06" }   # includes the system cancelling because the doctor was suspended (review R-07); reschedule only with another Verified doctor
+  - { id: RF05, trigger: technical_failure_recorded,    applies_to: online,    refund_pct: 100, auto: true,  alt: free_reschedule }
+  - { id: RF06, trigger: converted_to_in_person,        applies_to: online,    refund_pct: 50,  auto: true,  alt: credit_to_in_person_visit }   # [CONFIRM]
+  - { id: RF07, trigger: patient_cancelled, before_minutes_gte: 120, applies_to: any, refund_pct: 100, auto: true }
+  - { id: RF08, trigger: patient_cancelled, before_minutes_lt: 120,  applies_to: any, refund_pct: 0,   auto: false, blocked_by: FAIRNESS-01 }
+  - { id: RF09, trigger: patient_no_show,               applies_to: any,       refund_pct: 0,   auto: false, blocked_by: FAIRNESS-01 }
+
+# FAIRNESS-01 (blocks approval of this policy): RF08/RF09 are cancellation charges. E-Commerce Rules 2020 r.4(6) allow them
+# only if similar charges are borne on a unilateral clinic cancellation. RF03/RF04 only refund, so they do not meet that.
+# Founder picks: A) add compensation to RF03/RF04 when late (recommended), B) lower RF08/RF09 refund_pct loss + compensation,
+# C) RF08/RF09 refund_pct: 100. Lawyer confirms. See docs/legal/refund-policy.md "Fairness". status cannot become approved until resolved.
+
+refund_execution:
+  start_within_minutes: 60
+  destination: original_payment_method
+  settlement_mode_clinic_collected: refund_from_clinic_account_via_partner_api
+  on_refund_failure: [alert_clinic, open_grievance_ticket, pause_new_bookings_after_hours_48]   # [CONFIRM]
+  show_patient: [status, reference_number, expected_days]
+
+display_before_payment:
+  - seller_is_clinic
+  - full_fee_no_extra_charges
+  - refund_summary_with_version
+  - grievance_contact
+
+messages:   # i18n keys; English for review
+  refund.summary.short: "Free cancellation up to 2 hours before. Full refund if the doctor doesn't join or cancels."
+  refund.late_cancel:   "Cancelling now is less than 2 hours before your appointment, so no refund applies."
+  refund.doctor_no_show: "Your doctor did not join. We have started a full refund."
