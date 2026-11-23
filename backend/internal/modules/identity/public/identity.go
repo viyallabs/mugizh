@@ -25,11 +25,14 @@ const (
 
 // Roles (access-control-design §2). "nurse" is reserved (S-031): no accounts in v1.0.
 const (
-	RolePatient          = "patient"
-	RoleDoctor           = "doctor"
-	RoleClinicAdmin      = "clinic_admin"
-	RoleFrontDesk        = "front_desk"
-	RoleNurse            = "nurse"
+	RolePatient     = "patient"
+	RoleDoctor      = "doctor"
+	RoleClinicAdmin = "clinic_admin"
+	RoleFrontDesk   = "front_desk"
+	RoleNurse       = "nurse"
+	// RoleCaregiver is the role name a records read carries when a patient-app user reads another person's data through
+	// an active caregiver link (v1.1). It is never held in a session or granted by an admin; it is not valid in x-roles.
+	RoleCaregiver        = "caregiver"
 	RoleReviewer         = "reviewer"
 	RoleSupport          = "support"
 	RoleGrievanceOfficer = "grievance_officer"

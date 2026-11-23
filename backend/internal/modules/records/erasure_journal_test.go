@@ -19,7 +19,8 @@ import (
 // The tables a Core database restore rolls back in these tests. Write-once storage (key
 // tombstones and the erasure journal) is never restored: it lives outside the database
 // and keeps its newest copy (backup-and-restore.md section 2).
-var restoreTables = []string{"rights_task", "account_restriction", "rights_request", "document", "event_outbox"}
+var restoreTables = []string{"rights_task", "account_restriction", "rights_request", "document", "event_outbox",
+	"consent_record", "consent_state", "permission_grant", "caregiver_link", "caregiver_invitation", "revocation_outbox"}
 
 var backupSeq atomic.Int64
 
@@ -48,7 +49,7 @@ func (x *rx) restore(t *testing.T, tag, patient string) {
 	if _, err := tx.Exec(ctx, `TRUNCATE records.`+strings.Join(restoreTables, ", records.")); err != nil {
 		t.Fatal(err)
 	}
-	for _, tbl := range []string{"rights_request", "rights_task", "account_restriction", "document", "event_outbox"} {
+	for _, tbl := range restoreTables {
 		if _, err := tx.Exec(ctx, fmt.Sprintf(`INSERT INTO records.%s SELECT * FROM records.%s_%s`, tbl, tag, tbl)); err != nil {
 			t.Fatal(err)
 		}

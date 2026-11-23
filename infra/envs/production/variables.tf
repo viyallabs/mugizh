@@ -28,6 +28,11 @@ variable "certificate_arn" {
   type        = string
 }
 
+variable "api_public_url" {
+  description = "Public HTTPS base URL of the API, no trailing slash [FILL]. scheduler-core calls back to it through the ALB. The host must be on the egress allow-list."
+  type        = string
+}
+
 variable "image_tag" {
   description = "Release image tag to run [FILL]."
   type        = string
@@ -47,6 +52,10 @@ variable "enable_egress_firewall" {
   description = "Network Firewall egress allow-list (TM-41). On in production. Cost: about USD 570 a month for two AZs plus per-GB charges [VALIDATE]."
   type        = bool
   default     = true
+  validation {
+    condition     = var.enable_egress_firewall
+    error_message = "Production must keep the egress allow-list firewall on (TM-41). Staging may turn it off, production may not."
+  }
 }
 
 variable "egress_allowed_domains" {

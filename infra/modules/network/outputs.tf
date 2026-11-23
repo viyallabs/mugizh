@@ -8,3 +8,4 @@ output "nat_public_ips" {
   description = "Fixed egress addresses; give these to vendors that allow-list by IP."
   value       = [for e in aws_eip.nat : e.public_ip]
 }
+output "scheduler_security_group_id" { value = aws_security_group.scheduler.id }

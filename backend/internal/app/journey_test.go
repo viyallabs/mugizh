@@ -96,6 +96,7 @@ func newJourneyIn(t *testing.T, start time.Time, pack string) *journey {
 		t.Fatalf("BuildCore: %v", err)
 	}
 	t.Cleanup(c.Close)
+	c.Records.SetCaregiversEnabled(c.Config.Flag("caregivers")) // as cmd/api does
 	j.c = c
 	j.bus = outbox.NewBus(log)
 	app.Subscribe(j.bus, c)
@@ -103,7 +104,7 @@ func newJourneyIn(t *testing.T, start time.Time, pack string) *journey {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := app.NewRouter(app.RouterConfig{Log: log, Crypto: c.Crypto, Auth: c.Identity, Idempotency: c.Idem, IPPerMinute: 1_000_000, UserPerMinute: 1_000_000, Now: j.clock,
+	h := app.NewRouter(app.RouterConfig{CaregiversOn: c.Records.CaregiversEnabled, Log: log, Crypto: c.Crypto, Auth: c.Identity, Idempotency: c.Idem, IPPerMinute: 1_000_000, UserPerMinute: 1_000_000, Now: j.clock,
 		Mount: app.Mounts(app.Modules{Identity: c.Identity, Records: c.Records, Rights: c.Rights, Verification: c.Verification, Directory: c.Directory,
 			Booking: c.Booking, Payments: c.Payments, Notify: c.Notify, Admin: c.Admin, Rx: c.Rx, Consult: c.Consult, Reviews: c.ReviewsRoutes(), Sharing: c.Sharing, History: c.History},
 			pol, log, j.clock)})

@@ -529,8 +529,192 @@ paths:
               schema: { $ref: '#/components/schemas/AccessLogList' }
         '401': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/Problem' }
+  /v1/me/caregiver-invitations:
+    post:
+      operationId: createCaregiverInvitation
+      tags: [records]
+      summary: Invite a person I trust to see part of my care (needs P-CAREGIVER and a fresh step-up)
+      description: |
+        Needs the P-CAREGIVER consent (403 consent.required otherwise) and a fresh step-up. Returns a one-time
+        code once; only a keyed hash is kept. Scopes are a closed set (reminders, appointments, prescriptions,
+        documents). Omitted scopes mean the defaults (reminders, appointments); prescriptions and documents are
+        sensitive and are given only when the patient names them (E-FAM-02). 404 when caregivers are not on in
+        this country. 409 caregiving.limit_reached at the limit of caregivers and open invitations.
+      x-roles: [patient]
+      x-ownership: self
+      x-step-up: true
+      x-consent: P-CAREGIVER
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CaregiverInvitationCreate' }
+      responses:
+        '201':
+          description: The invitation with its one-time code
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CaregiverInvitation' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /v1/me/caregiver-invitations/{invitationId}:
+    delete:
+      operationId: cancelCaregiverInvitation
+      tags: [records]
+      summary: Cancel an invitation that was not used yet
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/InvitationId'
+      responses:
+        '204': { description: Cancelled; the code no longer works }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/me/caregivers:
+    get:
+      operationId: listMyCaregivers
+      tags: [records]
+      summary: The people who can see part of my care, and what they can see
+      description: The caregiver is shown by an opaque reference only, never a phone number or name. Newest first; revoked links stay as history.
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Links
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CaregiverLinkList' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/me/caregivers/{linkId}/scopes:
+    put:
+      operationId: setCaregiverScopes
+      tags: [records]
+      summary: Change what one caregiver can see; takes effect at once
+      description: A fresh step-up is needed only when a sensitive scope (prescriptions, documents) is added.
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/LinkId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CaregiverScopesSet' }
+      responses:
+        '200':
+          description: The link
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CaregiverLink' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/me/caregivers/{linkId}/revoke:
+    post:
+      operationId: revokeCaregiver
+      tags: [records]
+      summary: Remove a caregiver; their next read is denied
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/LinkId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Revoked }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/caregiving/redeem:
+    post:
+      operationId: redeemCaregiverCode
+      tags: [records]
+      summary: Accept an invitation with its one-time code
+      description: |
+        Any signed-in patient-app user other than the patient who made the code. The caller must confirm they are
+        in the country the pack allows (inCountryConfirmed: true). A wrong, expired, used or cancelled code all
+        answer the same 404. After 5 wrong codes in an hour: 429. 409 caregiving.limit_reached or
+        caregiving.already_linked.
+      x-roles: [patient]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CaregiverRedeem' }
+      responses:
+        '201':
+          description: The link
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CaregivingPatient' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+  /v1/caregiving/patients:
+    get:
+      operationId: listCaregivingPatients
+      tags: [records]
+      summary: The people whose care I can see
+      description: Opaque references and scopes only.
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Patients
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CaregivingPatientList' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/caregiving/patients/{patientId}/leave:
+    post:
+      operationId: leaveCaregiving
+      tags: [records]
+      summary: Stop being a caregiver for this person
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/PatientId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Left }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
 components:
   parameters:
+    InvitationId:
+      name: invitationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    LinkId:
+      name: linkId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     RequestId:
       name: requestId
       in: path
@@ -583,6 +767,88 @@ components:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
   schemas:
+    CaregiverScope:
+      type: string
+      enum: [reminders, appointments, prescriptions, documents]
+    CaregiverInvitationCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        label: { type: string, maxLength: 40, description: "Your own note for this person, shown only to you" }
+        scopes:
+          type: array
+          minItems: 1
+          maxItems: 4
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/CaregiverScope' }
+    CaregiverInvitation:
+      type: object
+      required: [invitationId, code, scopes, expiresAt]
+      properties:
+        label: { type: string, maxLength: 40 }
+        invitationId: { type: string, format: uuid }
+        code: { type: string, description: Shown once; 8 characters; not case-sensitive }
+        scopes:
+          type: array
+          items: { $ref: '#/components/schemas/CaregiverScope' }
+        expiresAt: { type: string, format: date-time }
+    CaregiverScopesSet:
+      type: object
+      additionalProperties: false
+      required: [scopes]
+      properties:
+        scopes:
+          type: array
+          minItems: 1
+          maxItems: 4
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/CaregiverScope' }
+    CaregiverLink:
+      type: object
+      required: [linkId, caregiverId, scopes, status, createdAt]
+      properties:
+        label: { type: string, maxLength: 40, description: "Your own note; never shown to the caregiver" }
+        linkId: { type: string, format: uuid }
+        caregiverId: { type: string, format: uuid, description: Opaque reference }
+        scopes:
+          type: array
+          items: { $ref: '#/components/schemas/CaregiverScope' }
+        status: { type: string, enum: [active, revoked] }
+        createdAt: { type: string, format: date-time }
+        revokedAt: { type: string, format: date-time }
+    CaregiverLinkList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CaregiverLink' }
+        nextCursor: { type: string }
+    CaregiverRedeem:
+      type: object
+      additionalProperties: false
+      required: [code, inCountryConfirmed]
+      properties:
+        code: { type: string, minLength: 6, maxLength: 20 }
+        inCountryConfirmed: { type: boolean }
+    CaregivingPatient:
+      type: object
+      required: [patientId, linkId, scopes, since]
+      properties:
+        patientId: { type: string, format: uuid, description: Opaque reference }
+        linkId: { type: string, format: uuid }
+        scopes:
+          type: array
+          items: { $ref: '#/components/schemas/CaregiverScope' }
+        since: { type: string, format: date-time }
+    CaregivingPatientList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CaregivingPatient' }
+        nextCursor: { type: string }
     RightsRequestCreate:
       type: object
       additionalProperties: false

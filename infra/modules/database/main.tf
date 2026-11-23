@@ -22,8 +22,17 @@ variable "data_subnet_ids" {
 }
 
 variable "client_security_group_ids" {
-  description = "Security groups allowed to connect on 5432 (the app tier)."
-  type        = list(string)
+  description = "Security groups allowed on 5432, per instance, keyed by a static label (keys must be known at plan time). The key store admits core tasks only (not scheduler-core)."
+  type = object({
+    core     = map(string)
+    keystore = map(string)
+  })
+}
+
+variable "final_snapshot_suffix" {
+  description = "Suffix of the core database final snapshot name. The snapshot holds field-encrypted data; delete it by hand within 35 days of decommissioning (K-DP-07). The key-store instance takes NO final snapshot."
+  type        = string
+  default     = "final"
 }
 
 variable "kms_key_arn" {
@@ -133,7 +142,7 @@ resource "aws_security_group" "db" {
 
 resource "aws_vpc_security_group_ingress_rule" "db" {
   for_each = {
-    for p in setproduct(keys(local.instances), var.client_security_group_ids) : "${p[0]}-${p[1]}" => { db = p[0], sg = p[1] }
+    for p in flatten([for db, sgs in var.client_security_group_ids : [for label, sg in sgs : { key = "${db}-${label}", db = db, sg = sg }]]) : p.key => p
   }
   security_group_id            = aws_security_group.db[each.value.db].id
   description                  = "PostgreSQL from the app tier"
@@ -164,14 +173,22 @@ resource "aws_db_parameter_group" "this" {
     name  = "log_statement"
     value = "none"
   }
+  parameter {
+    name  = "log_error_verbosity"
+    value = "terse"
+  }
+  parameter {
+    name  = "log_min_error_statement"
+    value = "panic"
+  }
   lifecycle {
     create_before_destroy = true
   }
 }
 
 resource "aws_cloudwatch_log_group" "db" {
-  for_each          = local.instances
-  name              = "/aws/rds/instance/${var.name}-${each.key}/postgresql"
+  for_each          = { for p in setproduct(keys(local.instances), ["postgresql", "upgrade"]) : "${p[0]}-${p[1]}" => { db = p[0], log = p[1] } }
+  name              = "/aws/rds/instance/${var.name}-${each.value.db}/${each.value.log}"
   retention_in_days = var.log_retention_days
   kms_key_id        = var.kms_key_arn
 }
@@ -205,14 +222,15 @@ resource "aws_db_instance" "this" {
 
   iam_database_authentication_enabled = false
 
-  backup_retention_period   = var.backup_retention_days
-  backup_window             = "20:00-21:00"
-  maintenance_window        = "sun:21:30-sun:22:30"
-  copy_tags_to_snapshot     = true
-  delete_automated_backups  = false
-  deletion_protection       = var.deletion_protection
-  skip_final_snapshot       = false
-  final_snapshot_identifier = "${var.name}-${each.key}-final"
+  backup_retention_period  = var.backup_retention_days
+  backup_window            = "20:00-21:00"
+  maintenance_window       = "sun:21:30-sun:22:30"
+  copy_tags_to_snapshot    = true
+  delete_automated_backups = false
+  deletion_protection      = var.deletion_protection
+  # The key store must not leave a snapshot that outlives the 35-day window (K-DP-07, crypto-shredding).
+  skip_final_snapshot       = each.key == "keystore"
+  final_snapshot_identifier = each.key == "keystore" ? null : "${var.name}-${each.key}-${var.final_snapshot_suffix}"
 
   auto_minor_version_upgrade = true
 

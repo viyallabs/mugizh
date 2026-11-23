@@ -18,6 +18,7 @@
 | `github.com/teambition/rrule-go` | RFC 5545 recurrence in scheduler-core | K-ARC-04 |
 | `go.opentelemetry.io/otel` (+ sdk, exporters) | Traces and metrics | ADR-03 |
 | `golang.org/x/crypto` | HKDF and constant-time helpers, only inside `internal/platform/crypto` | encryption-design §10 |
+| `github.com/aws/aws-sdk-go-v2` (config, s3, kms) | Cloud key management and S3-compatible storage adapters, under internal/adapters only | Proposed ADR-33 |
 | `github.com/testcontainers/testcontainers-go` (+ `modules/postgres`) | Integration tests only (`_test.go`, `internal/testkit`) | ADR-25 |
 
 **Not allowed** (examples): ORMs, web frameworks other than chi, Redis clients (no Redis in the stack), any cloud SDK outside `internal/adapters/<kind>/<vendor>/` (dual-cloud rule ADR-31), analytics, ads or attribution SDKs (K-SEC-06 note, E-DP-25).

@@ -31,3 +31,18 @@ provider "aws" {
     }
   }
 }
+
+# Second India region. Staging builds nothing here except the GuardDuty detector (no DR in staging).
+provider "aws" {
+  alias               = "dr"
+  region              = "ap-south-2"
+  allowed_account_ids = [var.account_id]
+  default_tags {
+    tags = {
+      project    = "mugizh"
+      env        = "staging"
+      data_class = "synthetic"
+      owner      = var.owner
+    }
+  }
+}

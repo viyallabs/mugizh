@@ -1,0 +1,134 @@
+#cloud-config
+# Dev VM first boot. Synthetic data only. Clones nothing; holds no secret in this file.
+# Phase 1 (here): Docker, the encrypted block volume, PostGIS. Phase 2 (by hand, after docker login to the
+# GitLab registry): /opt/mugizh/deploy.sh pulls the core image, migrates, creates the module roles and starts api and worker.
+package_update: true
+package_upgrade: false
+packages:
+%{ for p in packages ~}
+  - ${p}
+%{ endfor ~}
+  - ca-certificates
+  - curl
+write_files:
+  - path: /opt/mugizh/init.sql
+    permissions: "0644"
+    content: |
+      -- Separate database for the key store (encryption-design section 4), as deploy/local/init.sql.
+      CREATE DATABASE mugizh_keystore;
+  - path: /opt/mugizh/docker-compose.yml
+    permissions: "0644"
+    content: |
+      # Same stack as deploy/local/docker-compose.yml. The database is not published on the host.
+      name: mugizh-dev
+      services:
+        db:
+          image: ${postgis_image}
+          restart: unless-stopped
+          environment:
+            POSTGRES_USER: owner
+            POSTGRES_PASSWORD_FILE: /run/secrets/owner_pw
+            POSTGRES_DB: mugizh
+            PGDATA: /var/lib/postgresql/data/pgdata
+          volumes:
+            - /srv/mugizh-db:/var/lib/postgresql/data
+            - /opt/mugizh/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+            - /etc/mugizh/owner_pw:/run/secrets/owner_pw:ro
+          healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U owner -d mugizh"]
+            interval: 5s
+            retries: 30
+        api:
+          image: ${core_image}
+          restart: unless-stopped
+          env_file: /etc/mugizh/app.env
+          environment:
+            MUGIZH_PACK_DIR: /app/config/country-packs/IN
+            MUGIZH_VENDOR_REGISTER: /app/config/vendor-register.yaml
+            MUGIZH_BLOB_DIR: /data/blobs
+          read_only: true
+          volumes: ["mugizh-blobs:/data/blobs"]
+          ports: ["127.0.0.1:8080:8080"]
+          depends_on: { db: { condition: service_healthy } }
+        worker:
+          image: ${core_image}
+          restart: unless-stopped
+          entrypoint: ["/app/worker"]
+          env_file: /etc/mugizh/app.env
+          environment:
+            MUGIZH_PACK_DIR: /app/config/country-packs/IN
+            MUGIZH_VENDOR_REGISTER: /app/config/vendor-register.yaml
+            MUGIZH_BLOB_DIR: /data/blobs
+            HTTP_ADDR: ":8082"
+          read_only: true
+          volumes: ["mugizh-blobs:/data/blobs"]
+          depends_on: { db: { condition: service_healthy } }
+        migrate:
+          profiles: ["tools"]
+          image: ${core_image}
+          entrypoint: ["/app/migrate"]
+          command: ["up"]
+          env_file: /etc/mugizh/owner.env
+          depends_on: { db: { condition: service_healthy } }
+      volumes:
+        mugizh-blobs: {}
+  - path: /opt/mugizh/setup.sh
+    permissions: "0750"
+    content: |
+      #!/usr/bin/env bash
+      # Phase 1: mount the encrypted block volume, generate the database owner password on this VM, start PostGIS.
+      set -euo pipefail
+      dev=${db_device}
+      for i in $(seq 1 60); do [ -e "$dev" ] && break; sleep 5; done
+      [ -e "$dev" ] || { echo "block volume $dev did not appear" >&2; exit 1; }
+      blkid "$dev" >/dev/null 2>&1 || mkfs.ext4 -q -L mugizh-db "$dev"
+      mkdir -p /srv/mugizh-db
+      grep -q "LABEL=mugizh-db" /etc/fstab || echo "LABEL=mugizh-db /srv/mugizh-db ext4 defaults,nofail 0 2" >> /etc/fstab
+      mount -a
+      install -d -m 0750 /etc/mugizh
+      umask 077
+      [ -s /etc/mugizh/owner_pw ] || head -c 24 /dev/urandom | base64 | tr -d '/+=' > /etc/mugizh/owner_pw
+      systemctl enable --now docker
+      docker compose -f /opt/mugizh/docker-compose.yml up -d --wait db
+      echo "phase 1 done: docker login to the GitLab registry, then run /opt/mugizh/deploy.sh" > /etc/motd
+  - path: /opt/mugizh/deploy.sh
+    permissions: "0750"
+    content: |
+      #!/usr/bin/env bash
+      # Phase 2, as up.sh does locally: pull, migrate, one login role per module with random passwords, start api and worker.
+      # Run as root after: docker login registry.gitlab.com (read-only deploy token, never stored in code).
+      set -euo pipefail
+      c="docker compose -f /opt/mugizh/docker-compose.yml"
+      pw="$(cat /etc/mugizh/owner_pw)"
+      umask 077
+      {
+        echo "MUGIZH_DB_URL_OWNER=postgres://owner:$pw@db:5432/mugizh?sslmode=disable"
+        echo "MUGIZH_KEYSTORE_OWNER_URL=postgres://owner:$pw@db:5432/mugizh_keystore?sslmode=disable"
+      } > /etc/mugizh/owner.env
+      $c --profile tools pull
+      $c --profile tools run --rm migrate
+      if [ ! -s /etc/mugizh/app.env ]; then
+        env_file=/etc/mugizh/app.env
+        {
+          echo "APP_ENV=dev"
+          echo "MUGIZH_BLIND_INDEX_KEY=$(head -c 32 /dev/urandom | base64)"
+          echo "MUGIZH_LOCAL_ROOT_KEY=$(head -c 32 /dev/urandom | base64)"
+          echo "MUGIZH_SCHEDULER_CALLBACK_SECRET=$(head -c 32 /dev/urandom | base64)"
+        } > "$env_file"
+        sql=""
+        for m in admin audit booking clinical consult directory identity notifications payments platform records reviews verification queue keystore; do
+          p="$(head -c 18 /dev/urandom | base64 | tr -d '/+=')"
+          case $m in
+            queue) group=mugizh_queue; db=mugizh; var=MUGIZH_DB_URL_QUEUE ;;
+            keystore) group=mugizh_keystore; db=mugizh_keystore; var=MUGIZH_KEYSTORE_URL ;;
+            *) group="mugizh_mod_$m"; db=mugizh; var="MUGIZH_DB_URL_$(echo "$m" | tr a-z A-Z)" ;;
+          esac
+          sql="$sql DROP ROLE IF EXISTS mugizh_app_$m; CREATE ROLE mugizh_app_$m LOGIN PASSWORD '$p' IN ROLE $group;"
+          echo "$var=postgres://mugizh_app_$m:$p@db:5432/$db?sslmode=disable" >> "$env_file"
+        done
+        $c exec -T db psql -q -U owner -d mugizh -c "$sql" > /dev/null
+      fi
+      $c up -d api worker
+      echo "api listens on 127.0.0.1:8080 of this VM (reach it through a Bastion port-forwarding session)"
+runcmd:
+  - [bash, /opt/mugizh/setup.sh]

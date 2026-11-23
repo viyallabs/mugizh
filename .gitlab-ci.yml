@@ -4,12 +4,17 @@
 #
 # Tool image: built from tools/devimage/Dockerfile and pushed to $CI_REGISTRY_IMAGE/dev:1 by `devimage` on main.
 # First run on a fresh project: run the `devimage` job once (manually on a branch via the `when: manual` rule) before the others.
+# Deploy tool image: tools/deployimage/Dockerfile, pushed to $CI_REGISTRY_IMAGE/deploy:1 by `deployimage` on main (run it before any deploy job).
+# Deploy jobs (S-094) are in the deploy stage; their CI variables are listed in docs/ops/production-readiness.md section 4.
+# Accepted Low (L6): the other job images (docker, trivy, gitleaks, spectral, the dev image) are pinned by version tag, not digest. Only the
+# deploy tool image, which holds AWS credentials, is pinned by digest (DEPLOY_IMAGE_DIGEST).
 
 stages:
   - lint
   - test
   - security
   - build
+  - deploy
 
 workflow:
   rules:
@@ -18,9 +23,12 @@ workflow:
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never
     - if: $CI_COMMIT_BRANCH
+    # Release tags (v<digit>*) get a pipeline so that `deploy-production` and the production tofu jobs can run.
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]/
 
 variables:
   DEV_IMAGE: $CI_REGISTRY_IMAGE/dev:1
+  DEPLOY_IMAGE: $CI_REGISTRY_IMAGE/deploy:1   # only for building and pushing; the deploy and tofu jobs use $CI_REGISTRY_IMAGE/deploy@$DEPLOY_IMAGE_DIGEST
   GOFLAGS: -mod=readonly
   GOCACHE: $CI_PROJECT_DIR/.cache/go-build
   GOMODCACHE: $CI_PROJECT_DIR/.cache/go-mod
@@ -169,6 +177,8 @@ devimage:
 
 # Production images (S-094): one core image (api, worker, migrate) and one scheduler-core image,
 # non-root, from scratch. Scanned before push; a HIGH or CRITICAL finding fails the job (K-SEC-06).
+# Built on the default branch only: a release tag promotes the image already built, scanned and staged for that
+# commit (same digest), it never rebuilds it. Tag a commit that is on main and already has its image.
 images:
   stage: build
   image: docker:27.5.1
@@ -181,7 +191,6 @@ images:
   allow_failure: false
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_COMMIT_TAG
   script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - docker build -f deploy/images/core.Dockerfile -t "$CI_REGISTRY_IMAGE/core:$CI_COMMIT_SHORT_SHA" .
@@ -191,3 +200,163 @@ images:
       done
     - docker push "$CI_REGISTRY_IMAGE/core:$CI_COMMIT_SHORT_SHA"
     - docker push "$CI_REGISTRY_IMAGE/scheduler-core:$CI_COMMIT_SHORT_SHA"
+    # Record the pushed digests; deploy-staging deploys exactly these (M2). RepoDigests exists after the push.
+    - |
+      for pair in "core:CORE_IMAGE_DIGEST" "scheduler-core:SCHEDULER_CORE_IMAGE_DIGEST"; do
+        img="${pair%%:*}"; var="${pair##*:}"
+        ref="$(docker inspect --format '{{index .RepoDigests 0}}' "$CI_REGISTRY_IMAGE/$img:$CI_COMMIT_SHORT_SHA")"
+        digest="${ref##*@}"
+        case "$digest" in sha256:*) ;; *) echo "no digest for $img"; exit 1 ;; esac
+        echo "$var=$digest" >> images.env
+        echo "$img $digest"
+      done
+  artifacts:
+    reports:
+      dotenv: images.env
+    expire_in: 1 week
+
+# Deploy tool image (S-094): OpenTofu, AWS CLI, crane, jq, pinned and checksum-verified in the Dockerfile.
+deployimage:
+  stage: build
+  image: docker:27.5.1
+  services:
+    - name: docker:27.5.1-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  allow_failure: false
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker build -t "$DEPLOY_IMAGE" -f tools/deployimage/Dockerfile tools/deployimage
+    # Scan before push: a HIGH or CRITICAL finding with a fix fails the job and nothing is pushed. Accepted upstream-binary
+    # findings are in tools/deployimage/.trivyignore (each expires); Debian packages are never ignored. The ignore file is
+    # copied into the container (a bind mount would point at the dind host, not at this checkout).
+    - docker create --name deploy-scan -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.65.0 image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --ignorefile /trivyignore --no-progress "$DEPLOY_IMAGE"
+    - docker cp tools/deployimage/.trivyignore deploy-scan:/trivyignore
+    - docker start -a deploy-scan
+    - docker push "$DEPLOY_IMAGE"
+    # Pin the deploy and tofu jobs to this build: set the CI variable DEPLOY_IMAGE_DIGEST to the digest printed here
+    # (docs/ops/production-readiness.md, Deploying, first-run checklist). The jobs fail if it is unset.
+    - docker inspect --format '{{index .RepoDigests 0}}' "$DEPLOY_IMAGE" | sed 's/.*@/DEPLOY_IMAGE_DIGEST=/'
+
+# ---------------------------------------------------------------- deploy (S-094)
+# Code deploys never change infrastructure (that is the tofu-* jobs below). AWS access is by GitLab OIDC only:
+# the id_token audience must equal the audience the AWS OIDC provider trusts (infra/modules/ci_access).
+# Environment-scoped CI variables (same names in both environments) hold the role ARNs and network ids;
+# the list is in docs/ops/production-readiness.md section 4. No secret is stored in this file (K-SEC-05).
+.deploy-job:
+  stage: deploy
+  image:
+    name: $CI_REGISTRY_IMAGE/deploy@$DEPLOY_IMAGE_DIGEST
+    entrypoint: [""]
+  allow_failure: false
+  id_tokens:
+    GITLAB_OIDC_TOKEN:
+      aud: $AWS_OIDC_AUDIENCE
+
+deploy-staging:
+  extends: .deploy-job
+  needs:
+    - job: images
+      artifacts: true
+  environment:
+    name: staging
+  resource_group: staging
+  rules:
+    # [VALIDATE] make automatic (remove `when: manual`) after the first successful run.
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+  script:
+    - bash tools/ci/deploy.sh staging "$CI_COMMIT_SHORT_SHA"
+
+# Manual promotion to production, from a release tag only. The GitLab protected environment `production`
+# requires approval before this job can run (documented in production-readiness.md section 4).
+deploy-production:
+  extends: .deploy-job
+  environment:
+    name: production
+  resource_group: production
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]/
+      when: manual
+  script:
+    - bash tools/ci/deploy.sh production "$CI_COMMIT_SHORT_SHA"
+
+# ---------------------------------------------------------------- infrastructure (S-094), manual only
+# Uses the separate infrastructure-apply role (INFRA_ROLE_ARN), not the deploy role. The plan is saved as an
+# artifact and the apply job applies exactly that plan. Both need the CI variables listed in production-readiness.md.
+.tofu-job:
+  stage: deploy
+  image:
+    name: $CI_REGISTRY_IMAGE/deploy@$DEPLOY_IMAGE_DIGEST
+    entrypoint: [""]
+  allow_failure: false
+  id_tokens:
+    GITLAB_OIDC_TOKEN:
+      aud: $AWS_OIDC_AUDIENCE
+
+tofu-plan-staging:
+  extends: .tofu-job
+  environment:
+    name: staging-infra
+    action: prepare
+  resource_group: staging
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+  script:
+    - bash tools/ci/tofu.sh staging plan
+  artifacts:
+    paths:
+      - infra/envs/staging/plan.tfplan
+    expire_in: 1 day
+    access: maintainer
+
+tofu-apply-staging:
+  extends: .tofu-job
+  needs:
+    - job: tofu-plan-staging
+      artifacts: true
+  environment:
+    name: staging-infra
+  resource_group: staging
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+  script:
+    - bash tools/ci/tofu.sh staging apply
+
+tofu-plan-production:
+  extends: .tofu-job
+  environment:
+    name: production-infra
+    action: prepare
+  resource_group: production
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]/
+      when: manual
+  script:
+    - bash tools/ci/tofu.sh production plan
+  artifacts:
+    paths:
+      - infra/envs/production/plan.tfplan
+    expire_in: 1 day
+    access: maintainer
+
+# Production-protected: the GitLab protected environment `production-infra` requires approval.
+tofu-apply-production:
+  extends: .tofu-job
+  needs:
+    - job: tofu-plan-production
+      artifacts: true
+  environment:
+    name: production-infra
+  resource_group: production
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]/
+      when: manual
+  script:
+    - bash tools/ci/tofu.sh production apply

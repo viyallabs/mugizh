@@ -90,6 +90,86 @@ Every alert is one ERROR log line with `msg = "ops.alert"` and `reason = <code>`
    - the change log names the stories.
 6. **Restore:** follow [backup-and-restore.md](../security/backup-and-restore.md) section 3. Key tombstones and the erasure journal are replayed automatically at start-up (D-74).
 
+### Deploying (S-094)
+
+**Status: written, never run** (no AWS accounts, blocker V1). Files: `tools/ci/deploy.sh`, `tools/ci/tofu.sh`, `tools/ci/check-gitlab-protection.sh`, `tools/deployimage/Dockerfile`, the `deploy` stage of `.gitlab-ci.yml`, `infra/modules/ci_access`.
+
+**What a deploy does** (`deploy.sh <env> <tag>`; the tag is the commit short SHA that `images` built on `main`):
+
+1. Assumes the environment's deploy role with the job's GitLab OIDC token (regional STS, `ap-south-1`). No stored keys. The role name must be exactly `mugizh-<env>-gitlab-deploy`.
+2. Copies `core` and `scheduler-core` from the GitLab registry to ECR **by digest** with `crane`. Staging copies exactly the digests the `images` job wrote to its dotenv artifact (`CORE_IMAGE_DIGEST`, `SCHEDULER_CORE_IMAGE_DIGEST`) and fails if they are absent. Production resolves the release tag in the GitLab registry (precondition 4 below). A re-run finds the same digest and copies nothing; a tag that exists in ECR with another digest fails the job.
+3. Registers new revisions of `migrate` and `scheduler-migrate` (only the image changes, by digest), runs them, and fails the deploy unless every container exits 0. Services are untouched until then.
+4. Updates `worker`, then `scheduler-core`, then `api`, each waiting until stable **and** on the new revision (the ECS circuit breaker can roll back by itself, and a rolled-back service also reports "stable").
+5. Smoke check: `GET <API_PUBLIC_URL>/health/ready` must answer 200 three times in a row within 5 minutes.
+6. Any failure after step 4 starts rolls the services back to the revisions recorded before the deploy. It first assumes the role again from the same token, so an expired session cannot block it, and it ignores TERM and INT while rolling back. It waits for the services to be stable and exits non-zero. Migrations are never rolled back.
+
+Infrastructure is **never** changed by a deploy. `tofu apply` is the separate manual jobs `tofu-plan-<env>` then `tofu-apply-<env>` (they apply the saved plan artifact only, with the separate infra-apply role). All jobs of one environment, deploy and tofu, share one `resource_group` (`staging`, `production`), so they never run at the same time.
+
+#### What actually protects production (read this)
+
+AWS can check only the OIDC `aud` and `sub` claims. It cannot check GitLab's `ref_protected` or environment claims. The audience is set in `.gitlab-ci.yml`, is not secret and is **not a control** (it only stops a token meant for another service from being accepted). `sub` names the project and the tag, so **the control is GitLab**: who can create a tag matching `v*`, who can push to `main`, and who must approve the production environments. Anyone who can create a `v*` tag in this project, or merge to `main`, can obtain the production deploy role and the infra-apply role. The preconditions below are therefore mandatory.
+
+**Mandatory preconditions (numbered; all true before the first production deploy, and re-checked after any change)**
+
+1. **Protected tag `v*`**: create allowed for **Maintainers only** (no Developers, no extra users or groups).
+2. **Protected branch `main`**: **no direct push** (allowed to push: No one), force push off, and **at least one merge request approval required** (approval rule).
+3. **Protected environments `production` and `production-infra`** with **required approval** (approvers are the release approvers only). The staging jobs run from `main` only.
+4. **Immutable release images in the GitLab registry**: enable protected container-repository tags (tag rules) for `core:*` and `scheduler-core:*` so only Maintainers can push or overwrite them and nobody can retag a digest afterwards [VALIDATE the GitLab version supports protected or immutable container tags]. Production resolves the release tag (tag pipelines cannot read the `images` artifact of `main`), so a mutable tag would let someone change what is deployed. Make release tags on a commit of `main` that already has its image. Keep registry cleanup policies from deleting those tags [VALIDATE].
+5. **Run `tools/ci/check-gitlab-protection.sh <project-id>`** with a maintainer's read-only personal token (`GITLAB_TOKEN`, scope `read_api`). It checks 1 to 3 through the API (`protected_tags`, `protected_branches`, `approval_rules`, `protected_environments`) and exits non-zero if any is missing. It cannot check 4; confirm that by hand.
+6. **The approver of every production deploy compares digests.** The `deploy-production` log prints the two image digests. The approver compares them with the digests printed by the `deploy-staging` job for the same commit (cross-account, so no script can do it) and approves only if they are equal.
+
+Residual risk, accepted and explicit: a compromised Maintainer account, or a GitLab administrator, can still create a release tag, approve, and so reach production; the alerts below detect, they do not prevent. The infra-apply role is AdministratorAccess in its account (below). The deploy role can push images to the two ECR repositories and register task definitions that use the data-access task roles, because IAM cannot bind an image to a role. The mitigations are the alerts and the digest comparison.
+
+#### Infra-apply role and alerts (`modules/ci_access`)
+
+- **Role `mugizh-<env>-gitlab-infra-apply`**: staging trusts `ref_type:branch:ref:main` only; production trusts the protected tag patterns `v0*` to `v9*` only; maximum session 1 hour. Permission: `AdministratorAccess`, accepted **only** because the organisation SCP (`infra/org`: region lock R1 and the audit and key denies) is attached to the OU of the account, and because every assumption raises an alert. Apply `infra/org` before anything else. **[CONFIRM]** with the founder; narrow it later.
+- **Alerts to the SNS alerts topic** (EventBridge rules on CloudTrail management events in `ap-south-1`; the message holds only the event name, caller ARN and time): (a) the infra role was assumed (expected only during a manual tofu job); (b) a task definition was registered with any image outside `<account>.dkr.ecr.ap-south-1.amazonaws.com/mugizh-<env>/`; (c) `RegisterTaskDefinition` or `RunTask` by any principal other than the deploy and infra roles. `RunTask` carries no image, so it is covered by (c). Not caught: a task definition registered by the deploy role that uses an image from the environment's own repositories, and calls by a principal with no session issuer (root). [VALIDATE] all patterns against real events at the first deploy (checklist step 8) and subscribe an on-call endpoint (`alert_endpoint`).
+- The deploy role holds only what the script calls: register, describe and tag task definitions, `RunTask` on the two migrate families, `DescribeTasks`, update and describe the three services, `PassRole` for the task and execution roles, ECR push to the two repositories.
+
+#### GitLab setup (once)
+
+- Preconditions 1 to 5 above. Create the environments `staging`, `production`, `staging-infra`, `production-infra`.
+- Run the `deployimage` job once on `main`. It scans the image with Trivy (a HIGH or CRITICAL finding with a fix fails the job and nothing is pushed), pushes `deploy:1` and prints `DEPLOY_IMAGE_DIGEST=sha256:...`. Create the CI variable `DEPLOY_IMAGE_DIGEST` with that `sha256:...` value (protected). The deploy and tofu jobs run the image `deploy@$DEPLOY_IMAGE_DIGEST` and the scripts refuse to run without it. Update it only after reviewing a new build.
+- Trivy gate (D-91): the tool image uses OpenTofu 1.13.9 (newest line, release at least two weeks old), a Debian snapshot at least two weeks old with `apt-get upgrade` (no Debian finding is ever ignored), and `tools/deployimage/.trivyignore` for the HIGH findings with fixes that remain inside upstream binaries we cannot rebuild (crane, OpenTofu dependencies, the AWS CLI bundle). Every entry expires 2026-12-23: after that the `deployimage` job fails until the tool is bumped or the entry is re-reviewed. The job passes `--ignorefile tools/deployimage/.trivyignore`.
+- The tool image's apt packages come from a dated Debian snapshot (`SNAPSHOT` in the Dockerfile), so the exact pins stay installable.
+- Accepted Low: the other job images (docker, trivy, gitleaks and so on) are pinned by version tag, not by digest.
+
+**CI variables to create** (Settings, CI/CD, Variables; set **Protected**, scope each by environment, so the same name holds a different value in `staging` and `production`)
+
+| Variable | Scope | Value |
+|---|---|---|
+| `AWS_OIDC_AUDIENCE` | all | Audience of the AWS OIDC provider (`audience` in `modules/ci_access`, default `https://gitlab.com`). Not a secret, not a control |
+| `DEPLOY_IMAGE_DIGEST` | all | `sha256:...` printed by `deployimage` |
+| `DEPLOY_ROLE_ARN` | staging, production | `deploy_role_arn` output (exactly `mugizh-<env>-gitlab-deploy`) |
+| `DEPLOY_SUBNET_IDS` | staging, production | Comma-separated `app_subnet_ids` |
+| `DEPLOY_APP_SG_ID` | staging, production | `app_security_group_id` (migrate task) |
+| `DEPLOY_SCHEDULER_SG_ID` | staging, production | `scheduler_security_group_id` (scheduler-migrate task) |
+| `API_PUBLIC_URL` | staging, production | `https://<api host>`, no path, no trailing slash (the `api_public_url` tfvar) |
+| `AWS_REGION` | optional | Default `ap-south-1`. The cluster, task families and ECR path are fixed as `mugizh-<env>` |
+| `INFRA_ROLE_ARN` | staging-infra, production-infra | `infra_role_arn` output (exactly `mugizh-<env>-gitlab-infra-apply`) |
+| `TF_STATE_BUCKET`, `TF_STATE_KMS_KEY_ID` | staging-infra, production-infra | The state bucket and key from the bootstrap |
+| `TFVARS_FILE` (type **File**) | staging-infra, production-infra | The environment's `terraform.tfvars` (no secrets belong in it) |
+
+`DEPLOY_ROLE_ARN`, `INFRA_ROLE_ARN`, `DEPLOY_SUBNET_IDS`, `DEPLOY_APP_SG_ID` and `DEPLOY_SCHEDULER_SG_ID` are printed by `tofu output -json` (`deploy_ci_variables`, `infra_role_arn`) in each environment root.
+
+**First-run checklist** (preconditions first)
+
+1. Preconditions 1 to 5 of "What actually protects production" are **mandatory**, with `check-gitlab-protection.sh` passing. Do not continue otherwise.
+2. AWS accounts, `infra/org` (SCP and CloudTrail), OIDC thumbprint, state bucket, certificate, DNS: infra/README.md bootstrap steps 0 to 4. The first `tofu apply` of each environment is by hand (the infra role does not exist before it); afterwards use the manual tofu jobs.
+3. The task definitions that OpenTofu creates point at `image_tag` from the tfvars. Copy that image into the environment's ECR first (`crane copy`, by digest), or accept that the services fail until the first deploy.
+4. Run `deployimage`, create `DEPLOY_IMAGE_DIGEST` and the other variables. Subscribe on-call to the alerts topic.
+5. Populate the Secrets Manager secrets (infra/README.md, "What the migrate jobs do").
+6. Run `deploy-staging` (manual) from a `main` pipeline. Read the log: digests equal the `images` job's, migrations with exit code 0, services stable, smoke passed.
+7. Break test on staging: an unset `CORE_IMAGE_DIGEST` (must fail before any change) and a build whose `/health/ready` fails (must roll back).
+8. [VALIDATE] the GitLab `sub` claim format, the id_token lifetime (the rollback re-assumes the role from the same token, which works only while the token has not expired), and that the three alert rules fire on a test registration with a foreign image.
+9. Then make `deploy-staging` automatic (remove `when: manual` in `.gitlab-ci.yml`).
+
+**Rollback**
+
+- Automatic: a failed migration stops the deploy before any service changes. A failed rollout, a service not on the new revision, or a failed smoke check rolls the touched services back to their previous revisions (the job log lists them).
+- If the automatic rollback itself fails, the log says `MANUAL INTERVENTION REQUIRED` with the previous revisions: run `aws ecs update-service --cluster <cluster> --service <name> --task-definition <family>:<revision>` for each service (api, scheduler-core, worker) under break-glass access, then `aws ecs wait services-stable`.
+- Later rollback of a released version: re-run `deploy-production` from the previous release tag (same procedure, the previous image digest). Migrations stay (forward-only); a wrong migration is fixed with a new migration.
+
 ## 5. Before the go-live review (checklist)
 
 - [ ] On-call rota and paging named (incident-response-runbook section 2) [FILL]

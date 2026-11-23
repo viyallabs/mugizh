@@ -1,12 +1,18 @@
-# Compute: ECS on Fargate. Services api, worker, scheduler-core, and a one-off migrate task
-# definition. Tasks run in the private app subnets. Secrets are injected from Secrets Manager
-# (the secrets are created EMPTY here; values are written by the migrate job or by operators,
+# Compute: ECS on Fargate. Services api, worker and scheduler-core, plus two one-off task
+# definitions: migrate (core database and key store) and scheduler-migrate (scheduler-core
+# database). Tasks run in the private app subnets. Secrets are injected from Secrets Manager
+# (the secrets are created EMPTY here; values are written by the migrate jobs or by operators,
 # never by OpenTofu, K-SEC-05).
 #
-# PRODUCTION IMAGES MUST RUN AS NON-ROOT (R4-5). The task definitions also force user
-# 10001:10001, a read-only root filesystem, a writable /tmp volume, and drop all capabilities.
-# NOTE: the Go start-up currently refuses APP_ENV=staging|production until the cloud KMS and
-# S3 adapters exist (S-093/S-098), so these tasks will not become healthy before then.
+# Images (deploy/images/*.Dockerfile): ONE core image holds /app/api, /app/worker and
+# /app/migrate (the same image per release); scheduler-core has its own image with
+# ENTRYPOINT /app/scheduler-core. The task definitions set entryPoint explicitly.
+# PRODUCTION IMAGES MUST RUN AS NON-ROOT (R4-5): the images use 65532:65532 and the task
+# definitions force the same user, a read-only root filesystem, a writable /tmp volume, and
+# drop all capabilities.
+# NOTE: the Go start-up in staging uses the AWS KMS and S3 adapters (this module passes their
+# settings) with the vendor fakes (adapter rule A10); production still refuses to start until
+# the SMS, payment and video adapters exist.
 
 variable "name" {
   description = "Name prefix, for example mugizh-staging."
@@ -27,7 +33,13 @@ variable "app_subnet_ids" {
 }
 
 variable "app_security_group_id" {
-  type = string
+  description = "Security group of the core tasks (api, worker, migrate)."
+  type        = string
+}
+
+variable "scheduler_security_group_id" {
+  description = "Security group of the scheduler-core tasks. It can reach only the core database port and HTTPS."
+  type        = string
 }
 
 variable "kms_key_arn" {
@@ -43,8 +55,36 @@ variable "worm_bucket_arn" {
   type = string
 }
 
+variable "blobs_bucket_name" {
+  description = "MUGIZH_BLOB_BUCKET: the versioned data bucket."
+  type        = string
+}
+
+variable "worm_bucket_name" {
+  description = "MUGIZH_WORM_BUCKET: the Object Lock bucket for write-once evidence."
+  type        = string
+}
+
+variable "allowed_regions" {
+  description = "MUGIZH_ALLOWED_REGIONS: the residency regions the application accepts for AWS_REGION."
+  type        = list(string)
+  validation {
+    condition     = length(var.allowed_regions) > 0
+    error_message = "allowed_regions must not be empty."
+  }
+}
+
 variable "api_target_group_arn" {
   type = string
+}
+
+variable "api_public_url" {
+  description = "Public HTTPS base URL of the API, for example https://api.example.in [FILL]. scheduler-core calls back to it, through the ALB."
+  type        = string
+  validation {
+    condition     = startswith(var.api_public_url, "https://") && !endswith(var.api_public_url, "/")
+    error_message = "api_public_url must start with https:// and have no trailing slash."
+  }
 }
 
 variable "secret_name_prefix" {
@@ -52,13 +92,37 @@ variable "secret_name_prefix" {
   type        = string
 }
 
+variable "secret_replica_region" {
+  description = "Replicate the secrets to this region (production DR). Null for none."
+  type        = string
+  default     = null
+}
+
+variable "secret_replica_kms_key_arn" {
+  description = "Key in the replica region (the data key replica)."
+  type        = string
+  default     = null
+}
+
+variable "ecr_replication_region" {
+  description = "Replicate the ECR repositories to this region (production DR). The destination repositories must exist already (KMS-encrypted). Null for none."
+  type        = string
+  default     = null
+}
+
 variable "image_tag" {
-  description = "Image tag to deploy [FILL]. Repositories are immutable, so use a release tag or digest, never latest."
+  description = "Core image tag to deploy [FILL]. Repositories are immutable, so use a release tag or digest, never latest."
   type        = string
   validation {
     condition     = var.image_tag != "latest"
     error_message = "Do not deploy the latest tag."
   }
+}
+
+variable "scheduler_image_tag" {
+  description = "scheduler-core image tag. Defaults to image_tag."
+  type        = string
+  default     = null
 }
 
 variable "db_modules" {
@@ -68,18 +132,6 @@ variable "db_modules" {
     "admin", "audit", "booking", "clinical", "consult", "directory", "identity",
     "notifications", "payments", "platform", "records", "reviews", "verification",
   ]
-}
-
-variable "pack_dir" {
-  description = "MUGIZH_PACK_DIR inside the image."
-  type        = string
-  default     = "/app/config/country-packs/IN"
-}
-
-variable "vendor_register" {
-  description = "MUGIZH_VENDOR_REGISTER inside the image."
-  type        = string
-  default     = "/app/config/vendor-register.yaml"
 }
 
 variable "otlp_endpoint" {
@@ -98,13 +150,14 @@ variable "desired_count" {
 }
 
 variable "task_size" {
-  description = "Fargate cpu units and memory MiB per service."
+  description = "Fargate cpu units and memory MiB per task."
   type        = map(object({ cpu = number, memory = number }))
   default = {
-    api            = { cpu = 512, memory = 1024 }
-    worker         = { cpu = 512, memory = 1024 }
-    scheduler-core = { cpu = 256, memory = 512 }
-    migrate        = { cpu = 256, memory = 512 }
+    api               = { cpu = 512, memory = 1024 }
+    worker            = { cpu = 512, memory = 1024 }
+    scheduler-core    = { cpu = 256, memory = 512 }
+    migrate           = { cpu = 256, memory = 512 }
+    scheduler-migrate = { cpu = 256, memory = 512 }
   }
 }
 
@@ -125,61 +178,105 @@ data "aws_caller_identity" "current" {}
 locals {
   api_port       = 8080
   scheduler_port = 8081
-  repositories   = ["api", "worker", "scheduler-core", "migrate"]
+  repositories   = ["core", "scheduler-core"]
+  user           = "65532:65532"
 
-  db_url_vars = [for m in var.db_modules : "MUGIZH_DB_URL_${upper(m)}"]
-  shared_vars = ["MUGIZH_KEYSTORE_URL", "MUGIZH_BLIND_INDEX_KEY", "MUGIZH_SCHEDULER_CALLBACK_SECRET", "MUGIZH_SCHEDULER_TOKEN"]
-  all_vars = toset(concat(
-    local.db_url_vars, local.shared_vars,
-    ["MUGIZH_DB_URL_QUEUE", "MUGIZH_SCHEDULER_DB_URL", "MUGIZH_DB_URL_OWNER", "MUGIZH_KEYSTORE_OWNER_URL"],
-  ))
-
-  common_env = merge(
+  # Secret keys are shared where one secret value feeds two variables (the callback HMAC
+  # secret is the same value in core and in scheduler-core).
+  core_secrets = merge(
+    { for m in var.db_modules : "MUGIZH_DB_URL_${upper(m)}" => "mugizh_db_url_${m}" },
     {
-      APP_ENV                = var.app_env
-      HTTP_ADDR              = ":${local.api_port}"
-      TRUSTED_PROXIES        = "1" # one hop: the ALB (settings reject 0 or unset outside dev)
-      MUGIZH_PACK_DIR        = var.pack_dir
-      MUGIZH_SCHEDULER_URL   = "http://scheduler-core:${local.scheduler_port}"
-      MUGIZH_VENDOR_REGISTER = var.vendor_register
+      MUGIZH_KEYSTORE_URL              = "mugizh_keystore_url"
+      MUGIZH_BLIND_INDEX_KEY           = "mugizh_blind_index_key"
+      MUGIZH_SCHEDULER_CALLBACK_SECRET = "scheduler_callback_secret"
+      MUGIZH_SCHEDULER_TOKEN           = "scheduler_service_token"
+    },
+  )
+
+  core_env = merge(
+    {
+      APP_ENV              = var.app_env
+      HTTP_ADDR            = ":${local.api_port}"
+      TRUSTED_PROXIES      = "1" # one hop: the ALB (settings reject 0 or unset outside dev)
+      MUGIZH_SCHEDULER_URL = "http://scheduler-core:${local.scheduler_port}"
+      # Key management and storage (adapters awskms and s3store); the task role grants exactly this access.
+      MUGIZH_KEY_PROVIDER    = "aws-kms"
+      MUGIZH_KMS_KEY_ID      = var.kms_key_arn
+      AWS_REGION             = data.aws_region.current.name
+      MUGIZH_ALLOWED_REGIONS = join(",", var.allowed_regions)
+      MUGIZH_BLOB_STORE      = "s3"
+      MUGIZH_BLOB_BUCKET     = var.blobs_bucket_name
+      MUGIZH_WORM_BUCKET     = var.worm_bucket_name
     },
     var.otlp_endpoint == "" ? {} : { MUGIZH_OTLP_ENDPOINT = var.otlp_endpoint },
   )
 
+  # The country pack and vendor register paths are baked into the image (ENV in the Dockerfile).
   tasks = {
     api = {
-      secrets     = concat(local.db_url_vars, local.shared_vars)
+      repo        = "core"
+      entry       = ["/app/api"]
+      command     = null
+      secrets     = local.core_secrets
+      env         = local.core_env
       data_access = true
       service     = true
       port        = local.api_port
-      env         = local.common_env
-      command     = null
+      sg          = var.app_security_group_id
     }
     worker = {
-      secrets     = concat(local.db_url_vars, local.shared_vars, ["MUGIZH_DB_URL_QUEUE"])
+      repo        = "core"
+      entry       = ["/app/worker"]
+      command     = null
+      secrets     = merge(local.core_secrets, { MUGIZH_DB_URL_QUEUE = "mugizh_db_url_queue" })
+      env         = merge(local.core_env, { HTTP_ADDR = ":8082" })
       data_access = true
       service     = true
       port        = null
-      env         = merge(local.common_env, { HTTP_ADDR = ":8082" })
-      command     = null
+      sg          = var.app_security_group_id
     }
     scheduler-core = {
       # scheduler-core holds no health data (K-ARC-02): no KMS, no S3, its own database.
-      secrets     = ["MUGIZH_SCHEDULER_DB_URL", "MUGIZH_SCHEDULER_TOKEN", "MUGIZH_SCHEDULER_CALLBACK_SECRET"]
+      repo    = "scheduler-core"
+      entry   = ["/app/scheduler-core"]
+      command = null
+      secrets = {
+        SCHEDULER_DATABASE_URL         = "scheduler_database_url"
+        SCHEDULER_CALLBACK_HMAC_SECRET = "scheduler_callback_secret"
+        SCHEDULER_SERVICE_TOKEN_SHA256 = "scheduler_service_token_sha256"
+      }
+      env = {
+        SCHEDULER_LISTEN_ADDR  = ":${local.scheduler_port}"
+        SCHEDULER_CALLBACK_URL = "${var.api_public_url}/internal/v1/scheduler/occurrence-due"
+      }
       data_access = false
       service     = true
       port        = local.scheduler_port
-      env         = { APP_ENV = var.app_env, HTTP_ADDR = ":${local.scheduler_port}", TRUSTED_PROXIES = "1" }
-      command     = null
+      sg          = var.scheduler_security_group_id
     }
     migrate = {
-      # One-off. Runs migrations and creates the per-module login roles (as deploy/local/up.sh does).
-      secrets     = ["MUGIZH_DB_URL_OWNER", "MUGIZH_KEYSTORE_OWNER_URL"]
+      # One-off: core migrations and the per-module login roles (as deploy/local/up.sh does).
+      repo        = "core"
+      entry       = ["/app/migrate"]
+      command     = ["up"]
+      secrets     = { MUGIZH_DB_URL_OWNER = "mugizh_db_url_owner", MUGIZH_KEYSTORE_OWNER_URL = "mugizh_keystore_owner_url" }
+      env         = { APP_ENV = var.app_env }
       data_access = false
       service     = false
       port        = null
-      env         = { APP_ENV = var.app_env }
-      command     = ["up"]
+      sg          = var.app_security_group_id
+    }
+    scheduler-migrate = {
+      # One-off: scheduler-core migrations (subcommand "migrate", with the migration owner's DSN).
+      repo        = "scheduler-core"
+      entry       = ["/app/scheduler-core"]
+      command     = ["migrate"]
+      secrets     = { SCHEDULER_MIGRATE_DATABASE_URL = "scheduler_migrate_database_url" }
+      env         = {}
+      data_access = false
+      service     = false
+      port        = null
+      sg          = var.scheduler_security_group_id
     }
   }
   services = { for k, t in local.tasks : k => t if t.service }
@@ -188,14 +285,27 @@ locals {
     worker         = var.desired_count.worker
     scheduler-core = var.desired_count.scheduler_core
   }
+  secret_keys = toset(flatten([for t in local.tasks : values(t.secrets)]))
+  image_tags = {
+    core           = var.image_tag
+    scheduler-core = coalesce(var.scheduler_image_tag, var.image_tag)
+  }
 }
 
 # ---------- Secrets (empty shells) ----------
 resource "aws_secretsmanager_secret" "app" {
-  for_each                = local.all_vars
-  name                    = "${var.secret_name_prefix}/${lower(each.key)}"
+  for_each                = local.secret_keys
+  name                    = "${var.secret_name_prefix}/${each.key}"
   kms_key_id              = var.kms_key_arn
   recovery_window_in_days = 30
+
+  dynamic "replica" {
+    for_each = var.secret_replica_region == null ? [] : [1]
+    content {
+      region     = var.secret_replica_region
+      kms_key_id = var.secret_replica_kms_key_arn
+    }
+  }
 }
 
 # ---------- ECR ----------
@@ -223,6 +333,24 @@ resource "aws_ecr_lifecycle_policy" "this" {
       action       = { type = "expire" }
     }]
   })
+}
+
+# DR: replicate images to the second India region. The destination repositories are created
+# beforehand (KMS-encrypted, immutable) by the production environment.
+resource "aws_ecr_replication_configuration" "dr" {
+  count = var.ecr_replication_region == null ? 0 : 1
+  replication_configuration {
+    rule {
+      destination {
+        region      = var.ecr_replication_region
+        registry_id = data.aws_caller_identity.current.account_id
+      }
+      repository_filter {
+        filter      = "${var.name}/"
+        filter_type = "PREFIX_MATCH"
+      }
+    }
+  }
 }
 
 # ---------- Logs ----------
@@ -279,19 +407,44 @@ resource "aws_iam_role" "exec" {
 data "aws_iam_policy_document" "task" {
   for_each = { for k, t in local.tasks : k => t if t.data_access }
 
+  # The application wraps its data keys with kms:Encrypt/Decrypt, always with the "mugizh:aad"
+  # encryption context (internal/adapters/keys/awskms); a call without it is not allowed.
   statement {
-    sid       = "DataKey"
-    actions   = ["kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey", "kms:DescribeKey"]
+    sid       = "DataKeyWrap"
+    actions   = ["kms:Encrypt", "kms:Decrypt"]
     resources = [var.kms_key_arn]
+    condition {
+      test     = "Null"
+      variable = "kms:EncryptionContextKeys"
+      values   = ["false"]
+    }
+    condition {
+      test     = "ForAllValues:StringEquals"
+      variable = "kms:EncryptionContextKeys"
+      values   = ["mugizh:aad"]
+    }
   }
+  # S3 default encryption (SSE-KMS) uses the caller's permission, only through S3.
   statement {
-    sid       = "BlobsReadWrite"
-    actions   = ["s3:GetObject", "s3:GetObjectVersion", "s3:PutObject"]
+    sid       = "DataKeyViaS3"
+    actions   = ["kms:Decrypt", "kms:GenerateDataKey"]
+    resources = [var.kms_key_arn]
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["s3.${data.aws_region.current.name}.amazonaws.com"]
+    }
+  }
+  # Erasure and the prohibited-identifier purge delete from the blobs bucket (versioned; old
+  # versions expire after 35 days, so crypto-shredding still covers them). Never from worm.
+  statement {
+    sid       = "BlobsReadWriteDelete"
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
     resources = ["${var.blobs_bucket_arn}/*"]
   }
   statement {
     sid       = "WormPutGetOnly"
-    actions   = ["s3:GetObject", "s3:GetObjectVersion", "s3:PutObject"]
+    actions   = ["s3:GetObject", "s3:PutObject"]
     resources = ["${var.worm_bucket_arn}/*"]
   }
   statement {
@@ -322,7 +475,7 @@ data "aws_iam_policy_document" "exec" {
   statement {
     sid       = "PullOwnImage"
     actions   = ["ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer", "ecr:BatchCheckLayerAvailability"]
-    resources = [aws_ecr_repository.this[each.key].arn]
+    resources = [aws_ecr_repository.this[each.value.repo].arn]
   }
   statement {
     sid       = "OwnLogs"
@@ -332,7 +485,7 @@ data "aws_iam_policy_document" "exec" {
   statement {
     sid       = "OwnSecrets"
     actions   = ["secretsmanager:GetSecretValue"]
-    resources = [for v in each.value.secrets : aws_secretsmanager_secret.app[v].arn]
+    resources = [for k in distinct(values(each.value.secrets)) : aws_secretsmanager_secret.app[k].arn]
   }
   statement {
     sid       = "DecryptSecrets"
@@ -372,19 +525,19 @@ resource "aws_ecs_task_definition" "this" {
     merge(
       {
         name                   = each.key
-        image                  = "${aws_ecr_repository.this[each.key].repository_url}:${var.image_tag}"
+        image                  = "${aws_ecr_repository.this[each.value.repo].repository_url}:${local.image_tags[each.value.repo]}"
         essential              = true
-        user                   = "10001:10001"
+        user                   = local.user
         readonlyRootFilesystem = true
         privileged             = false
-        command                = each.value.command
+        entryPoint             = each.value.entry
         linuxParameters = {
           initProcessEnabled = true
           capabilities       = { drop = ["ALL"] }
         }
         mountPoints = [{ sourceVolume = "tmp", containerPath = "/tmp", readOnly = false }]
         environment = [for k, v in each.value.env : { name = k, value = v }]
-        secrets     = [for v in each.value.secrets : { name = v, valueFrom = aws_secretsmanager_secret.app[v].arn }]
+        secrets     = [for k, v in each.value.secrets : { name = k, valueFrom = aws_secretsmanager_secret.app[v].arn }]
         logConfiguration = {
           logDriver = "awslogs"
           options = {
@@ -394,6 +547,7 @@ resource "aws_ecs_task_definition" "this" {
           }
         }
       },
+      each.value.command == null ? {} : { command = each.value.command },
       each.value.port == null ? {} : {
         portMappings = [{ name = "http", containerPort = each.value.port, protocol = "tcp", appProtocol = "http" }]
       },
@@ -422,7 +576,7 @@ resource "aws_ecs_service" "this" {
 
   network_configuration {
     subnets          = var.app_subnet_ids
-    security_groups  = [var.app_security_group_id]
+    security_groups  = [each.value.sg]
     assign_public_ip = false
   }
 
@@ -461,7 +615,14 @@ output "cluster_arn" { value = aws_ecs_cluster.this.arn }
 output "cluster_name" { value = aws_ecs_cluster.this.name }
 output "service_names" { value = { for k, s in aws_ecs_service.this : k => s.name } }
 output "service_arns" { value = [for s in aws_ecs_service.this : s.id] }
-output "migrate_task_family" { value = aws_ecs_task_definition.this["migrate"].family }
+output "migrate_task_families" {
+  description = "One-off task definition families the deploy role may run."
+  value       = [aws_ecs_task_definition.this["migrate"].family, aws_ecs_task_definition.this["scheduler-migrate"].family]
+}
+output "task_families" {
+  description = "Families of all task definitions (the deploy role registers new revisions of these)."
+  value       = [for t in aws_ecs_task_definition.this : t.family]
+}
 output "task_role_arns" { value = [for r in aws_iam_role.task : r.arn] }
 output "exec_role_arns" { value = [for r in aws_iam_role.exec : r.arn] }
 output "ecr_repository_arns" { value = [for r in aws_ecr_repository.this : r.arn] }

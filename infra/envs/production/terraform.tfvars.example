@@ -6,3 +6,4 @@ image_tag                 = "[FILL]"
 gitlab_project_path       = "[FILL]"
 oidc_provider_thumbprints = ["[FILL]"]
 alert_endpoint            = "[FILL]"
+api_public_url            = "[FILL]"

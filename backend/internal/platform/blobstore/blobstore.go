@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -36,10 +37,20 @@ var reKey = regexp.MustCompile(`^[a-z0-9][a-z0-9/_\-.]{0,200}$`)
 // LocalDir is a filesystem store for local development and tests only.
 type LocalDir struct{ Root string }
 
+// ValidKey reports whether key is acceptable to every store: lower-case path-like, at most
+// 201 characters, no leading dot or slash, no "..", "./" or "//" segments. Every Store
+// implementation (local and cloud) uses it so keys behave the same everywhere.
+func ValidKey(key string) error {
+	// reKey forbids a leading dot or slash; path.Clean rejects "..", "./" and "//" segments.
+	if !reKey.MatchString(key) || path.Clean(key) != key {
+		return fmt.Errorf("blobstore: invalid key %q", key)
+	}
+	return nil
+}
+
 func (l LocalDir) path(key string) (string, error) {
-	// reKey forbids a leading dot or slash; Clean rejects "..", "./" and "//" segments.
-	if !reKey.MatchString(key) || filepath.ToSlash(filepath.Clean(key)) != key {
-		return "", fmt.Errorf("blobstore: invalid key %q", key)
+	if err := ValidKey(key); err != nil {
+		return "", err
 	}
 	return filepath.Join(l.Root, filepath.FromSlash(key)), nil
 }

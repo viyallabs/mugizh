@@ -54,7 +54,9 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	go core.Records.Listen(ctx) // consent cache invalidation across instances
-	h := app.NewRouter(app.RouterConfig{Log: log, Telemetry: tel, Crypto: core.Crypto, Auth: core.Identity, Idempotency: core.Idem,
+	// The pack's "caregivers" flag (v1.1) turns the caregiver endpoints on; off, they answer 404 before sign-in.
+	core.Records.SetCaregiversEnabled(core.Config.Flag("caregivers"))
+	h := app.NewRouter(app.RouterConfig{CaregiversOn: core.Records.CaregiversEnabled, Log: log, Telemetry: tel, Crypto: core.Crypto, Auth: core.Identity, Idempotency: core.Idem,
 		TrustedProxies: s.TrustedProxies, Ready: core.Ready,
 		Mount: app.Mounts(app.Modules{Identity: core.Identity, Records: core.Records, Verification: core.Verification,
 			Directory: core.Directory, Booking: core.Booking, Payments: core.Payments, Notify: core.Notify, Rights: core.Rights,

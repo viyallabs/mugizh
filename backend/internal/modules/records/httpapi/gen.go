@@ -25,6 +25,48 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for CaregiverLinkStatus.
+const (
+	Active  CaregiverLinkStatus = "active"
+	Revoked CaregiverLinkStatus = "revoked"
+)
+
+// Valid indicates whether the value is a known member of the CaregiverLinkStatus enum.
+func (e CaregiverLinkStatus) Valid() bool {
+	switch e {
+	case Active:
+		return true
+	case Revoked:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CaregiverScope.
+const (
+	Appointments  CaregiverScope = "appointments"
+	Documents     CaregiverScope = "documents"
+	Prescriptions CaregiverScope = "prescriptions"
+	Reminders     CaregiverScope = "reminders"
+)
+
+// Valid indicates whether the value is a known member of the CaregiverScope enum.
+func (e CaregiverScope) Valid() bool {
+	switch e {
+	case Appointments:
+		return true
+	case Documents:
+		return true
+	case Prescriptions:
+		return true
+	case Reminders:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DocumentContentType.
 const (
 	Applicationpdf DocumentContentType = "application/pdf"
@@ -180,6 +222,76 @@ type AccessLogEntry struct {
 type AccessLogList struct {
 	Items      []AccessLogEntry `json:"items"`
 	NextCursor *string          `json:"nextCursor,omitempty"`
+}
+
+// CaregiverInvitation defines model for CaregiverInvitation.
+type CaregiverInvitation struct {
+	// Code Shown once; 8 characters; not case-sensitive
+	Code         string             `json:"code"`
+	ExpiresAt    time.Time          `json:"expiresAt"`
+	InvitationId openapi_types.UUID `json:"invitationId"`
+	Label        *string            `json:"label,omitempty"`
+	Scopes       []CaregiverScope   `json:"scopes"`
+}
+
+// CaregiverInvitationCreate defines model for CaregiverInvitationCreate.
+type CaregiverInvitationCreate struct {
+	// Label Your own note for this person, shown only to you
+	Label  *string           `json:"label,omitempty"`
+	Scopes *[]CaregiverScope `json:"scopes,omitempty"`
+}
+
+// CaregiverLink defines model for CaregiverLink.
+type CaregiverLink struct {
+	// CaregiverId Opaque reference
+	CaregiverId openapi_types.UUID `json:"caregiverId"`
+	CreatedAt   time.Time          `json:"createdAt"`
+
+	// Label Your own note; never shown to the caregiver
+	Label     *string             `json:"label,omitempty"`
+	LinkId    openapi_types.UUID  `json:"linkId"`
+	RevokedAt *time.Time          `json:"revokedAt,omitempty"`
+	Scopes    []CaregiverScope    `json:"scopes"`
+	Status    CaregiverLinkStatus `json:"status"`
+}
+
+// CaregiverLinkStatus defines model for CaregiverLink.Status.
+type CaregiverLinkStatus string
+
+// CaregiverLinkList defines model for CaregiverLinkList.
+type CaregiverLinkList struct {
+	Items      []CaregiverLink `json:"items"`
+	NextCursor *string         `json:"nextCursor,omitempty"`
+}
+
+// CaregiverRedeem defines model for CaregiverRedeem.
+type CaregiverRedeem struct {
+	Code               string `json:"code"`
+	InCountryConfirmed bool   `json:"inCountryConfirmed"`
+}
+
+// CaregiverScope defines model for CaregiverScope.
+type CaregiverScope string
+
+// CaregiverScopesSet defines model for CaregiverScopesSet.
+type CaregiverScopesSet struct {
+	Scopes []CaregiverScope `json:"scopes"`
+}
+
+// CaregivingPatient defines model for CaregivingPatient.
+type CaregivingPatient struct {
+	LinkId openapi_types.UUID `json:"linkId"`
+
+	// PatientId Opaque reference
+	PatientId openapi_types.UUID `json:"patientId"`
+	Scopes    []CaregiverScope   `json:"scopes"`
+	Since     time.Time          `json:"since"`
+}
+
+// CaregivingPatientList defines model for CaregivingPatientList.
+type CaregivingPatientList struct {
+	Items      []CaregivingPatient `json:"items"`
+	NextCursor *string             `json:"nextCursor,omitempty"`
 }
 
 // Consent defines model for Consent.
@@ -385,8 +497,14 @@ type GrantId = openapi_types.UUID
 // IdempotencyKey defines model for IdempotencyKey.
 type IdempotencyKey = openapi_types.UUID
 
+// InvitationId defines model for InvitationId.
+type InvitationId = openapi_types.UUID
+
 // Limit defines model for Limit.
 type Limit = int
+
+// LinkId defines model for LinkId.
+type LinkId = openapi_types.UUID
 
 // PatientId defines model for PatientId.
 type PatientId = openapi_types.UUID
@@ -399,6 +517,22 @@ type RequestId = openapi_types.UUID
 
 // Token defines model for Token.
 type Token = string
+
+// ListCaregivingPatientsParams defines parameters for ListCaregivingPatients.
+type ListCaregivingPatientsParams struct {
+	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// LeaveCaregivingParams defines parameters for LeaveCaregiving.
+type LeaveCaregivingParams struct {
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// RedeemCaregiverCodeParams defines parameters for RedeemCaregiverCode.
+type RedeemCaregiverCodeParams struct {
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
 
 // IssueDocumentLinkParams defines parameters for IssueDocumentLink.
 type IssueDocumentLinkParams struct {
@@ -450,6 +584,27 @@ type RequestAccountErasureParams struct {
 
 // UndoAccountErasureParams defines parameters for UndoAccountErasure.
 type UndoAccountErasureParams struct {
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// CreateCaregiverInvitationParams defines parameters for CreateCaregiverInvitation.
+type CreateCaregiverInvitationParams struct {
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ListMyCaregiversParams defines parameters for ListMyCaregivers.
+type ListMyCaregiversParams struct {
+	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// RevokeCaregiverParams defines parameters for RevokeCaregiver.
+type RevokeCaregiverParams struct {
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// SetCaregiverScopesParams defines parameters for SetCaregiverScopes.
+type SetCaregiverScopesParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -523,8 +678,17 @@ type ListPatientDocumentsParams struct {
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
+// RedeemCaregiverCodeJSONRequestBody defines body for RedeemCaregiverCode for application/json ContentType.
+type RedeemCaregiverCodeJSONRequestBody = CaregiverRedeem
+
 // ApproveAccessExtensionJSONRequestBody defines body for ApproveAccessExtension for application/json ContentType.
 type ApproveAccessExtensionJSONRequestBody = ExtensionApprove
+
+// CreateCaregiverInvitationJSONRequestBody defines body for CreateCaregiverInvitation for application/json ContentType.
+type CreateCaregiverInvitationJSONRequestBody = CaregiverInvitationCreate
+
+// SetCaregiverScopesJSONRequestBody defines body for SetCaregiverScopes for application/json ContentType.
+type SetCaregiverScopesJSONRequestBody = CaregiverScopesSet
 
 // GrantConsentJSONRequestBody defines body for GrantConsent for application/json ContentType.
 type GrantConsentJSONRequestBody = ConsentGrant
@@ -540,6 +704,15 @@ type CreateRightsRequestJSONRequestBody = RightsRequestCreate
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListCaregivingPatients The people whose care I can see
+	// (GET /v1/caregiving/patients)
+	ListCaregivingPatients(w http.ResponseWriter, r *http.Request, params ListCaregivingPatientsParams)
+	// LeaveCaregiving Stop being a caregiver for this person
+	// (POST /v1/caregiving/patients/{patientId}/leave)
+	LeaveCaregiving(w http.ResponseWriter, r *http.Request, patientId PatientId, params LeaveCaregivingParams)
+	// RedeemCaregiverCode Accept an invitation with its one-time code
+	// (POST /v1/caregiving/redeem)
+	RedeemCaregiverCode(w http.ResponseWriter, r *http.Request, params RedeemCaregiverCodeParams)
 	// IssueDocumentLink Get a short-lived, single-use link to one document
 	// (POST /v1/documents/{documentId}/links)
 	IssueDocumentLink(w http.ResponseWriter, r *http.Request, documentId DocumentId, params IssueDocumentLinkParams)
@@ -573,6 +746,21 @@ type ServerInterface interface {
 	// UndoAccountErasure Undo an erasure inside the undo window
 	// (POST /v1/me/account-erasure/{requestId}/undo)
 	UndoAccountErasure(w http.ResponseWriter, r *http.Request, requestId RequestId, params UndoAccountErasureParams)
+	// CreateCaregiverInvitation Invite a person I trust to see part of my care (needs P-CAREGIVER and a fresh step-up)
+	// (POST /v1/me/caregiver-invitations)
+	CreateCaregiverInvitation(w http.ResponseWriter, r *http.Request, params CreateCaregiverInvitationParams)
+	// CancelCaregiverInvitation Cancel an invitation that was not used yet
+	// (DELETE /v1/me/caregiver-invitations/{invitationId})
+	CancelCaregiverInvitation(w http.ResponseWriter, r *http.Request, invitationId InvitationId)
+	// ListMyCaregivers The people who can see part of my care, and what they can see
+	// (GET /v1/me/caregivers)
+	ListMyCaregivers(w http.ResponseWriter, r *http.Request, params ListMyCaregiversParams)
+	// RevokeCaregiver Remove a caregiver; their next read is denied
+	// (POST /v1/me/caregivers/{linkId}/revoke)
+	RevokeCaregiver(w http.ResponseWriter, r *http.Request, linkId LinkId, params RevokeCaregiverParams)
+	// SetCaregiverScopes Change what one caregiver can see; takes effect at once
+	// (PUT /v1/me/caregivers/{linkId}/scopes)
+	SetCaregiverScopes(w http.ResponseWriter, r *http.Request, linkId LinkId, params SetCaregiverScopesParams)
 	// ListConsents My current consent choices
 	// (GET /v1/me/consents)
 	ListConsents(w http.ResponseWriter, r *http.Request, params ListConsentsParams)
@@ -620,6 +808,24 @@ type ServerInterface interface {
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// ListCaregivingPatients The people whose care I can see
+// (GET /v1/caregiving/patients)
+func (_ Unimplemented) ListCaregivingPatients(w http.ResponseWriter, r *http.Request, params ListCaregivingPatientsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// LeaveCaregiving Stop being a caregiver for this person
+// (POST /v1/caregiving/patients/{patientId}/leave)
+func (_ Unimplemented) LeaveCaregiving(w http.ResponseWriter, r *http.Request, patientId PatientId, params LeaveCaregivingParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RedeemCaregiverCode Accept an invitation with its one-time code
+// (POST /v1/caregiving/redeem)
+func (_ Unimplemented) RedeemCaregiverCode(w http.ResponseWriter, r *http.Request, params RedeemCaregiverCodeParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // IssueDocumentLink Get a short-lived, single-use link to one document
 // (POST /v1/documents/{documentId}/links)
@@ -684,6 +890,36 @@ func (_ Unimplemented) RequestAccountErasure(w http.ResponseWriter, r *http.Requ
 // UndoAccountErasure Undo an erasure inside the undo window
 // (POST /v1/me/account-erasure/{requestId}/undo)
 func (_ Unimplemented) UndoAccountErasure(w http.ResponseWriter, r *http.Request, requestId RequestId, params UndoAccountErasureParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateCaregiverInvitation Invite a person I trust to see part of my care (needs P-CAREGIVER and a fresh step-up)
+// (POST /v1/me/caregiver-invitations)
+func (_ Unimplemented) CreateCaregiverInvitation(w http.ResponseWriter, r *http.Request, params CreateCaregiverInvitationParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CancelCaregiverInvitation Cancel an invitation that was not used yet
+// (DELETE /v1/me/caregiver-invitations/{invitationId})
+func (_ Unimplemented) CancelCaregiverInvitation(w http.ResponseWriter, r *http.Request, invitationId InvitationId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListMyCaregivers The people who can see part of my care, and what they can see
+// (GET /v1/me/caregivers)
+func (_ Unimplemented) ListMyCaregivers(w http.ResponseWriter, r *http.Request, params ListMyCaregiversParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RevokeCaregiver Remove a caregiver; their next read is denied
+// (POST /v1/me/caregivers/{linkId}/revoke)
+func (_ Unimplemented) RevokeCaregiver(w http.ResponseWriter, r *http.Request, linkId LinkId, params RevokeCaregiverParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SetCaregiverScopes Change what one caregiver can see; takes effect at once
+// (PUT /v1/me/caregivers/{linkId}/scopes)
+func (_ Unimplemented) SetCaregiverScopes(w http.ResponseWriter, r *http.Request, linkId LinkId, params SetCaregiverScopesParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -779,6 +1015,143 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListCaregivingPatients operation middleware
+func (siw *ServerInterfaceWrapper) ListCaregivingPatients(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListCaregivingPatientsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCaregivingPatients(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LeaveCaregiving operation middleware
+func (siw *ServerInterfaceWrapper) LeaveCaregiving(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "patientId" -------------
+	var patientId PatientId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "patientId", chi.URLParam(r, "patientId"), &patientId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "patientId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params LeaveCaregivingParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LeaveCaregiving(w, r, patientId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RedeemCaregiverCode operation middleware
+func (siw *ServerInterfaceWrapper) RedeemCaregiverCode(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RedeemCaregiverCodeParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RedeemCaregiverCode(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // IssueDocumentLink operation middleware
 func (siw *ServerInterfaceWrapper) IssueDocumentLink(w http.ResponseWriter, r *http.Request) {
@@ -1276,6 +1649,219 @@ func (siw *ServerInterfaceWrapper) UndoAccountErasure(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UndoAccountErasure(w, r, requestId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateCaregiverInvitation operation middleware
+func (siw *ServerInterfaceWrapper) CreateCaregiverInvitation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateCaregiverInvitationParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCaregiverInvitation(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelCaregiverInvitation operation middleware
+func (siw *ServerInterfaceWrapper) CancelCaregiverInvitation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "invitationId" -------------
+	var invitationId InvitationId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invitationId", chi.URLParam(r, "invitationId"), &invitationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invitationId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelCaregiverInvitation(w, r, invitationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMyCaregivers operation middleware
+func (siw *ServerInterfaceWrapper) ListMyCaregivers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMyCaregiversParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMyCaregivers(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeCaregiver operation middleware
+func (siw *ServerInterfaceWrapper) RevokeCaregiver(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "linkId" -------------
+	var linkId LinkId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "linkId", chi.URLParam(r, "linkId"), &linkId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "linkId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokeCaregiverParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeCaregiver(w, r, linkId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetCaregiverScopes operation middleware
+func (siw *ServerInterfaceWrapper) SetCaregiverScopes(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "linkId" -------------
+	var linkId LinkId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "linkId", chi.URLParam(r, "linkId"), &linkId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "linkId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetCaregiverScopesParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetCaregiverScopes(w, r, linkId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2073,11 +2659,271 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/v1/me/access-log", wrapper.ListAccessLog)
 	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/me/caregiver-invitations", wrapper.CreateCaregiverInvitation)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/v1/me/caregiver-invitations/{invitationId}", wrapper.CancelCaregiverInvitation)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/me/caregivers", wrapper.ListMyCaregivers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/v1/me/caregivers/{linkId}/scopes", wrapper.SetCaregiverScopes)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/me/caregivers/{linkId}/revoke", wrapper.RevokeCaregiver)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/caregiving/redeem", wrapper.RedeemCaregiverCode)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/caregiving/patients", wrapper.ListCaregivingPatients)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/caregiving/patients/{patientId}/leave", wrapper.LeaveCaregiving)
+	})
 
 	return r
 }
 
 type ProblemApplicationProblemPlusJSONResponse Problem
+
+type ListCaregivingPatientsRequestObject struct {
+	Params ListCaregivingPatientsParams
+}
+
+type ListCaregivingPatientsResponseObject interface {
+	VisitListCaregivingPatientsResponse(w http.ResponseWriter) error
+}
+
+type ListCaregivingPatients200JSONResponse CaregivingPatientList
+
+func (response ListCaregivingPatients200JSONResponse) VisitListCaregivingPatientsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCaregivingPatients401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListCaregivingPatients401ApplicationProblemPlusJSONResponse) VisitListCaregivingPatientsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCaregivingPatients403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListCaregivingPatients403ApplicationProblemPlusJSONResponse) VisitListCaregivingPatientsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCaregivingPatients404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListCaregivingPatients404ApplicationProblemPlusJSONResponse) VisitListCaregivingPatientsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LeaveCaregivingRequestObject struct {
+	PatientId PatientId `json:"patientId"`
+	Params    LeaveCaregivingParams
+}
+
+type LeaveCaregivingResponseObject interface {
+	VisitLeaveCaregivingResponse(w http.ResponseWriter) error
+}
+
+type LeaveCaregiving204Response struct {
+}
+
+func (response LeaveCaregiving204Response) VisitLeaveCaregivingResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type LeaveCaregiving401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response LeaveCaregiving401ApplicationProblemPlusJSONResponse) VisitLeaveCaregivingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LeaveCaregiving403ApplicationProblemPlusJSONResponse Problem
+
+func (response LeaveCaregiving403ApplicationProblemPlusJSONResponse) VisitLeaveCaregivingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LeaveCaregiving404ApplicationProblemPlusJSONResponse Problem
+
+func (response LeaveCaregiving404ApplicationProblemPlusJSONResponse) VisitLeaveCaregivingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RedeemCaregiverCodeRequestObject struct {
+	Params RedeemCaregiverCodeParams
+	Body   *RedeemCaregiverCodeJSONRequestBody
+}
+
+type RedeemCaregiverCodeResponseObject interface {
+	VisitRedeemCaregiverCodeResponse(w http.ResponseWriter) error
+}
+
+type RedeemCaregiverCode201JSONResponse CaregivingPatient
+
+func (response RedeemCaregiverCode201JSONResponse) VisitRedeemCaregiverCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RedeemCaregiverCode400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RedeemCaregiverCode400ApplicationProblemPlusJSONResponse) VisitRedeemCaregiverCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RedeemCaregiverCode401ApplicationProblemPlusJSONResponse Problem
+
+func (response RedeemCaregiverCode401ApplicationProblemPlusJSONResponse) VisitRedeemCaregiverCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RedeemCaregiverCode403ApplicationProblemPlusJSONResponse Problem
+
+func (response RedeemCaregiverCode403ApplicationProblemPlusJSONResponse) VisitRedeemCaregiverCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RedeemCaregiverCode404ApplicationProblemPlusJSONResponse Problem
+
+func (response RedeemCaregiverCode404ApplicationProblemPlusJSONResponse) VisitRedeemCaregiverCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RedeemCaregiverCode409ApplicationProblemPlusJSONResponse Problem
+
+func (response RedeemCaregiverCode409ApplicationProblemPlusJSONResponse) VisitRedeemCaregiverCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RedeemCaregiverCode429ApplicationProblemPlusJSONResponse Problem
+
+func (response RedeemCaregiverCode429ApplicationProblemPlusJSONResponse) VisitRedeemCaregiverCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type IssueDocumentLinkRequestObject struct {
 	DocumentId DocumentId `json:"documentId"`
@@ -2904,6 +3750,370 @@ func (response UndoAccountErasure409ApplicationProblemPlusJSONResponse) VisitUnd
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCaregiverInvitationRequestObject struct {
+	Params CreateCaregiverInvitationParams
+	Body   *CreateCaregiverInvitationJSONRequestBody
+}
+
+type CreateCaregiverInvitationResponseObject interface {
+	VisitCreateCaregiverInvitationResponse(w http.ResponseWriter) error
+}
+
+type CreateCaregiverInvitation201JSONResponse CaregiverInvitation
+
+func (response CreateCaregiverInvitation201JSONResponse) VisitCreateCaregiverInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCaregiverInvitation400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateCaregiverInvitation400ApplicationProblemPlusJSONResponse) VisitCreateCaregiverInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCaregiverInvitation401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateCaregiverInvitation401ApplicationProblemPlusJSONResponse) VisitCreateCaregiverInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCaregiverInvitation403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateCaregiverInvitation403ApplicationProblemPlusJSONResponse) VisitCreateCaregiverInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCaregiverInvitation404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateCaregiverInvitation404ApplicationProblemPlusJSONResponse) VisitCreateCaregiverInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCaregiverInvitation409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateCaregiverInvitation409ApplicationProblemPlusJSONResponse) VisitCreateCaregiverInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelCaregiverInvitationRequestObject struct {
+	InvitationId InvitationId `json:"invitationId"`
+}
+
+type CancelCaregiverInvitationResponseObject interface {
+	VisitCancelCaregiverInvitationResponse(w http.ResponseWriter) error
+}
+
+type CancelCaregiverInvitation204Response struct {
+}
+
+func (response CancelCaregiverInvitation204Response) VisitCancelCaregiverInvitationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type CancelCaregiverInvitation401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CancelCaregiverInvitation401ApplicationProblemPlusJSONResponse) VisitCancelCaregiverInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelCaregiverInvitation403ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelCaregiverInvitation403ApplicationProblemPlusJSONResponse) VisitCancelCaregiverInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelCaregiverInvitation404ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelCaregiverInvitation404ApplicationProblemPlusJSONResponse) VisitCancelCaregiverInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyCaregiversRequestObject struct {
+	Params ListMyCaregiversParams
+}
+
+type ListMyCaregiversResponseObject interface {
+	VisitListMyCaregiversResponse(w http.ResponseWriter) error
+}
+
+type ListMyCaregivers200JSONResponse CaregiverLinkList
+
+func (response ListMyCaregivers200JSONResponse) VisitListMyCaregiversResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyCaregivers401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListMyCaregivers401ApplicationProblemPlusJSONResponse) VisitListMyCaregiversResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyCaregivers403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListMyCaregivers403ApplicationProblemPlusJSONResponse) VisitListMyCaregiversResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyCaregivers404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListMyCaregivers404ApplicationProblemPlusJSONResponse) VisitListMyCaregiversResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeCaregiverRequestObject struct {
+	LinkId LinkId `json:"linkId"`
+	Params RevokeCaregiverParams
+}
+
+type RevokeCaregiverResponseObject interface {
+	VisitRevokeCaregiverResponse(w http.ResponseWriter) error
+}
+
+type RevokeCaregiver204Response struct {
+}
+
+func (response RevokeCaregiver204Response) VisitRevokeCaregiverResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeCaregiver401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeCaregiver401ApplicationProblemPlusJSONResponse) VisitRevokeCaregiverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeCaregiver403ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokeCaregiver403ApplicationProblemPlusJSONResponse) VisitRevokeCaregiverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeCaregiver404ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokeCaregiver404ApplicationProblemPlusJSONResponse) VisitRevokeCaregiverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetCaregiverScopesRequestObject struct {
+	LinkId LinkId `json:"linkId"`
+	Params SetCaregiverScopesParams
+	Body   *SetCaregiverScopesJSONRequestBody
+}
+
+type SetCaregiverScopesResponseObject interface {
+	VisitSetCaregiverScopesResponse(w http.ResponseWriter) error
+}
+
+type SetCaregiverScopes200JSONResponse CaregiverLink
+
+func (response SetCaregiverScopes200JSONResponse) VisitSetCaregiverScopesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetCaregiverScopes400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response SetCaregiverScopes400ApplicationProblemPlusJSONResponse) VisitSetCaregiverScopesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetCaregiverScopes401ApplicationProblemPlusJSONResponse Problem
+
+func (response SetCaregiverScopes401ApplicationProblemPlusJSONResponse) VisitSetCaregiverScopesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetCaregiverScopes403ApplicationProblemPlusJSONResponse Problem
+
+func (response SetCaregiverScopes403ApplicationProblemPlusJSONResponse) VisitSetCaregiverScopesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetCaregiverScopes404ApplicationProblemPlusJSONResponse Problem
+
+func (response SetCaregiverScopes404ApplicationProblemPlusJSONResponse) VisitSetCaregiverScopesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -3950,6 +5160,15 @@ func (response ListPatientDocuments503ApplicationProblemPlusJSONResponse) VisitL
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// ListCaregivingPatients The people whose care I can see
+	// (GET /v1/caregiving/patients)
+	ListCaregivingPatients(ctx context.Context, request ListCaregivingPatientsRequestObject) (ListCaregivingPatientsResponseObject, error)
+	// LeaveCaregiving Stop being a caregiver for this person
+	// (POST /v1/caregiving/patients/{patientId}/leave)
+	LeaveCaregiving(ctx context.Context, request LeaveCaregivingRequestObject) (LeaveCaregivingResponseObject, error)
+	// RedeemCaregiverCode Accept an invitation with its one-time code
+	// (POST /v1/caregiving/redeem)
+	RedeemCaregiverCode(ctx context.Context, request RedeemCaregiverCodeRequestObject) (RedeemCaregiverCodeResponseObject, error)
 	// IssueDocumentLink Get a short-lived, single-use link to one document
 	// (POST /v1/documents/{documentId}/links)
 	IssueDocumentLink(ctx context.Context, request IssueDocumentLinkRequestObject) (IssueDocumentLinkResponseObject, error)
@@ -3983,6 +5202,21 @@ type StrictServerInterface interface {
 	// UndoAccountErasure Undo an erasure inside the undo window
 	// (POST /v1/me/account-erasure/{requestId}/undo)
 	UndoAccountErasure(ctx context.Context, request UndoAccountErasureRequestObject) (UndoAccountErasureResponseObject, error)
+	// CreateCaregiverInvitation Invite a person I trust to see part of my care (needs P-CAREGIVER and a fresh step-up)
+	// (POST /v1/me/caregiver-invitations)
+	CreateCaregiverInvitation(ctx context.Context, request CreateCaregiverInvitationRequestObject) (CreateCaregiverInvitationResponseObject, error)
+	// CancelCaregiverInvitation Cancel an invitation that was not used yet
+	// (DELETE /v1/me/caregiver-invitations/{invitationId})
+	CancelCaregiverInvitation(ctx context.Context, request CancelCaregiverInvitationRequestObject) (CancelCaregiverInvitationResponseObject, error)
+	// ListMyCaregivers The people who can see part of my care, and what they can see
+	// (GET /v1/me/caregivers)
+	ListMyCaregivers(ctx context.Context, request ListMyCaregiversRequestObject) (ListMyCaregiversResponseObject, error)
+	// RevokeCaregiver Remove a caregiver; their next read is denied
+	// (POST /v1/me/caregivers/{linkId}/revoke)
+	RevokeCaregiver(ctx context.Context, request RevokeCaregiverRequestObject) (RevokeCaregiverResponseObject, error)
+	// SetCaregiverScopes Change what one caregiver can see; takes effect at once
+	// (PUT /v1/me/caregivers/{linkId}/scopes)
+	SetCaregiverScopes(ctx context.Context, request SetCaregiverScopesRequestObject) (SetCaregiverScopesResponseObject, error)
 	// ListConsents My current consent choices
 	// (GET /v1/me/consents)
 	ListConsents(ctx context.Context, request ListConsentsRequestObject) (ListConsentsResponseObject, error)
@@ -4064,6 +5298,92 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ListCaregivingPatients operation middleware
+func (sh *strictHandler) ListCaregivingPatients(w http.ResponseWriter, r *http.Request, params ListCaregivingPatientsParams) {
+	var request ListCaregivingPatientsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCaregivingPatients(ctx, request.(ListCaregivingPatientsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCaregivingPatients")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCaregivingPatientsResponseObject); ok {
+		if err := validResponse.VisitListCaregivingPatientsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// LeaveCaregiving operation middleware
+func (sh *strictHandler) LeaveCaregiving(w http.ResponseWriter, r *http.Request, patientId PatientId, params LeaveCaregivingParams) {
+	var request LeaveCaregivingRequestObject
+
+	request.PatientId = patientId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.LeaveCaregiving(ctx, request.(LeaveCaregivingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "LeaveCaregiving")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(LeaveCaregivingResponseObject); ok {
+		if err := validResponse.VisitLeaveCaregivingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RedeemCaregiverCode operation middleware
+func (sh *strictHandler) RedeemCaregiverCode(w http.ResponseWriter, r *http.Request, params RedeemCaregiverCodeParams) {
+	var request RedeemCaregiverCodeRequestObject
+
+	request.Params = params
+
+	var body RedeemCaregiverCodeJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RedeemCaregiverCode(ctx, request.(RedeemCaregiverCodeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RedeemCaregiverCode")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RedeemCaregiverCodeResponseObject); ok {
+		if err := validResponse.VisitRedeemCaregiverCodeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // IssueDocumentLink operation middleware
@@ -4358,6 +5678,155 @@ func (sh *strictHandler) UndoAccountErasure(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UndoAccountErasureResponseObject); ok {
 		if err := validResponse.VisitUndoAccountErasureResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateCaregiverInvitation operation middleware
+func (sh *strictHandler) CreateCaregiverInvitation(w http.ResponseWriter, r *http.Request, params CreateCaregiverInvitationParams) {
+	var request CreateCaregiverInvitationRequestObject
+
+	request.Params = params
+
+	var body CreateCaregiverInvitationJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		if !errors.Is(err, io.EOF) {
+			sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+			return
+		}
+	} else {
+		request.Body = &body
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateCaregiverInvitation(ctx, request.(CreateCaregiverInvitationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateCaregiverInvitation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateCaregiverInvitationResponseObject); ok {
+		if err := validResponse.VisitCreateCaregiverInvitationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CancelCaregiverInvitation operation middleware
+func (sh *strictHandler) CancelCaregiverInvitation(w http.ResponseWriter, r *http.Request, invitationId InvitationId) {
+	var request CancelCaregiverInvitationRequestObject
+
+	request.InvitationId = invitationId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelCaregiverInvitation(ctx, request.(CancelCaregiverInvitationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelCaregiverInvitation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelCaregiverInvitationResponseObject); ok {
+		if err := validResponse.VisitCancelCaregiverInvitationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMyCaregivers operation middleware
+func (sh *strictHandler) ListMyCaregivers(w http.ResponseWriter, r *http.Request, params ListMyCaregiversParams) {
+	var request ListMyCaregiversRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMyCaregivers(ctx, request.(ListMyCaregiversRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMyCaregivers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMyCaregiversResponseObject); ok {
+		if err := validResponse.VisitListMyCaregiversResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeCaregiver operation middleware
+func (sh *strictHandler) RevokeCaregiver(w http.ResponseWriter, r *http.Request, linkId LinkId, params RevokeCaregiverParams) {
+	var request RevokeCaregiverRequestObject
+
+	request.LinkId = linkId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeCaregiver(ctx, request.(RevokeCaregiverRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeCaregiver")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeCaregiverResponseObject); ok {
+		if err := validResponse.VisitRevokeCaregiverResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetCaregiverScopes operation middleware
+func (sh *strictHandler) SetCaregiverScopes(w http.ResponseWriter, r *http.Request, linkId LinkId, params SetCaregiverScopesParams) {
+	var request SetCaregiverScopesRequestObject
+
+	request.LinkId = linkId
+	request.Params = params
+
+	var body SetCaregiverScopesJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetCaregiverScopes(ctx, request.(SetCaregiverScopesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetCaregiverScopes")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetCaregiverScopesResponseObject); ok {
+		if err := validResponse.VisitSetCaregiverScopesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -4766,84 +6235,105 @@ func (sh *strictHandler) ListPatientDocuments(w http.ResponseWriter, r *http.Req
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"fvHZx9n/DwA=",
+	"5D3rduM2eq+Cw+45sbuUZHucZGP98trO7LSTzdT2Jm3jqQ9MfpIQkwAHAK1R5+icPkTfYd9jH6VP0vMB",
+	"IAhK1M2WHM/k31gkcfnu9/kUJSIvBAeuVXTyKSqopDlokOavs1IqIfFfjEcn0YcS5CSKI05ziE6ixD6N",
+	"I5WMIKf4Wk4/vgU+1KPo5OjgII70pMA3lZaMD6PpNI7ORVLmwPWb1C9bUD2qV03rF+JIwoeSSUijEy1L",
+	"CHcaCJlTHZ1EZcnSqG2n15Iu2WYo6Rb2eJNCXggNPJn8K0z8ViOgKch6s+C1Dr634Sb8gWmqmeALb8PC",
+	"V552pbcsZ3oRyjPzMFwwhQEtM434jhH9LC/z6OQQkZ8z7v7y+zCuYQjSbcTvF14osw+fdpV3VLNlpFb4",
+	"50/cp5SFULB4H/982T4F1Rokfv1fv7w7f9/55bTzn+//+IfWHS/hQwlq8c2kf/60m12Le+AL9tDm2bL1",
+	"A2lwePQnQxDV36+O5reb4lqqEFyBkT7vpLjLIMd/JoJr4IYsaVFkLDG03ivsG3/8VQlzynrrP0gYRCfR",
+	"P/Vq8dazT1WvWtfsmIJKJCtwuegkupBSSLJ3+f0Z+e7462/3DRDcd7jsaZKAUm/F8IJrafi9kKIAqZk9",
+	"Mk20kBYrM7eL7bNLkUH7U93ASEo1dDTLYR4tcQS4+Zu08UE7CuPonvH24ziibHk2DXH6i9/NnDH2Vwwv",
+	"5LapF33vTyLufoVE44Yedm+Z0vOgYxry5j+W4XAGEVO/H5WSmr85fNS1/lp+Rbtl26HPqIQhewBZC+H5",
+	"oyciBSsLQ1q6GokxJ4In0Cd/IsmISppokKpPuNAkoQo6Crhimj20Y/ljwSSo0w0Ig81oipXUkdE7yGZY",
+	"9fig5UWViALWR48H2xV+N4+eWfg31ZeBp98zhMSaKDqTQLVBCU1Thr/Q7F2AsgHNFMQzWPSwaKLxP0Qp",
+	"CWKSCw1kICTRI6ZIAVIJHhPlsJxNiBZkIsoo3j0wc/rxjf3y2EhV98fhDJjjqOTsQwnuMYrn6XQZBFEl",
+	"t5C3B3A6D54fC/qhBCJhABJ4AlG8muoSg550E8peBzl9wuEBpEOJFkSPgPjDr4GXzFskK68g4UHcb3aF",
+	"LbNQHClNdWnWAY5m1i8oka0wcceL3s+dY4bzvJ0VIjlgPbdHiLP3qyhoG/K9seAziPdLSAHyDSVGJfcb",
+	"Xk/DzPmmVUifiRK11pngAyZzCPXznRAZUD53BScSW75dei1LOwGFSMgZT0EiSmlRCMZ1joCP8G41a+Hf",
+	"lSOmWqhodgt1BXpD4P3GQjAErjvKEkgyPnTOxDxhbyA1itAheboc3b5EYbjzmhJtBoihM+WlSi1HzMpr",
+	"QXiL4qNedIciRHDVShcmwtDO3HHgErbZ5ho+6p9AKmdtzjrPcVQW6WYadBZZgUdanbO5bbjHkmubIMuG",
+	"nM+FZgkE91ullxvAWttNngPjinjEIvg0odI8/BLIbIWM7VK7I94qGtfm0xiP+3rS1B8N7zsdRHHEcjqE",
+	"3q8FDP0fBR+26oxH2H1pI1y4WiKy/4Y/T7S9wjzbaKazNTzeRgjSfhM3ABJutMo0qkC8DXrw6NoZQVx8",
+	"1MCRtE+LQoqHTX0oqD6/gkTwVM3ruVM0z6UGSfy7RI8oN8Z6FT8MYoffHMQtiNxYhMyIguaZrkdA3nWu",
+	"/nJ6eUHwRfJg37SeRJ/kpdLkDswRq0eMoy+YQHjW1XIlPMZS8LsA3zzBpKIOMa1kh0YIoXnnn0dgYe5C",
+	"hSSjhQJF2ICUnHI1Bml0wnpsmtOPFytRj2DOBB/ibvBRS0pwOXMIZzyQhHJCs0yMozasyzDquYaLZt5+",
+	"gpYMo6ge7s2FQxi3g2EdNG9DNsyu+Qwywu105f3QWWGwcQBr5xhu85oL4ClrVVlL6ME7xouooQ1y37MM",
+	"2mMsj4BVKbPVWMSXVp3K23AzFkDGOEseI2nWO/+wzs+tXN68C7BBcCahdxm0296Pid1oKvVGt9MMZEhk",
+	"14e3SSklcH2bUImfXB/dijG/lZAImSr84dXtiCkt5ORWjdw7x7deTc7TZxx97LjHdxl07FZtDm6d7DTH",
+	"CuEZ3G0hbWxDPJmFdieT/mIBd2XgtkWluW1SXoiYQL8s59bwpo+KcwdhnzUhshH4PhvTLI5KrllLUPmU",
+	"E6AyYyAJ8LRpn4yE8nHmjGqQtfFaZcLjx5gaAfqb+IlX2oxBmrQ9PDmPT9CUZa2PGFeauiDQEtW5vmsV",
+	"R1rSZGGgw7mXy4Gjrc9VeWJ1TBov2AaSSyiE1Bjxa03RNsMq9WlykZYLLiFBA8cPLxe94YnpEdh3G8fV",
+	"4Wb3a70jG460Wugn0OT+vIRNhBhN7rkYZ5AON9ONKOwz2NSv3+xs8BERerG5ZB6JLL3g6UbfiFInIl9E",
+	"Bwmwh83uKg01rq0pA+JtUZebWcjzxm51AZNMuC2kGEpQ1o7FzxIbCRwwTjOmrJHhEWzeQvoDmzHiCWRZ",
+	"a5ap5uw6NZXYfSwqzbJSQkXvIKkqjcnDRc64TbS3rVvyVPztCawW2vBOrgSmvEduXDNQRawrmfBR2tjK",
+	"YjVfPHewCVAbsFwKwTbRuvJm2zAAGwvuzhA0dlG6POhmwXaxRnDEquWvFLGfoD2g+mRMJSd3MBASCNNr",
+	"B0leVqxvarT9QMzfHkUPU5ASFwUniQ1Dk72rzuHBt/uENq2irxR5YDAmYkDGI0FyOiEKjEnGJLHuzQ3f",
+	"0wykIteHmJi/Po7JVefwmz/td4mLcRvrThEqvR0HaZ9QYixka+Zxms8aejfcWHpkzx2xk4JiQ07+8fdv",
+	"9rvkZ6ZHqaRjxoeEEg6QBpdiiqSCA7mbkCQTKOrM2jRJRMl194Z7i+MkOkNMn757Q/7vf/7X3Uj5PQ04",
+	"0GFjfLgfxdFDZctGh92D7oHRKAVwWrDoJHrVPeweRCYTODIk0Hs47CU+W9VzIDWPhqBX5wmV3d7k2UwZ",
+	"Sjcy+0lfBhQhE8wlxEzGNyj2/aWdGutXerYwdBqvfNFR5vT9TD3f0cHBklq+zWr42rOGLRV9/rrTODo+",
+	"OFy0rj9oXR2I77/a8P3jDd5H9VzmOZUT5+cUIIoMkIeUrVshb0xAVIERJ3SonAJH8kOO/tgRYw5SjVgR",
+	"nUQKsoEJCUiRgQpSstF73GsBofU++cTttJcBtSH/Qli5OUNI+LiG/MYUVNfjrkFFM6XVLdR0PM8db2Gg",
+	"Xzimr7QoyB1YmeSrbmYLy7aPcOkrXCrkznq9E4KyE9IO45Vo79CiIKUCSYQehc6ue+4EfmrlMvpjXYKk",
+	"nNAsA2nFdmJLVfCNCcr3G864e92Usrj1knsb+Vdkb77K5YRoWcJ+l5ySsRR8GBMbJEljPF1KhCTeHDXH",
+	"wLVuXB7DbKBQeRwfHHfJ6UCDJF/bhczLCkMGlJORKOUJOT76rkuOD74jNfC6pu79VgJNRma3Gx48pJkE",
+	"mk5useoBUqs5moxjq4t8/cWZLebZjHla+cEYU38W6WTbgtVXRE2b9oSJLs5x4uHu5HqbTDeJJFcXdnxw",
+	"sGjNBZz7kiQDvv/dZu8fffdYyYM10wWaK6SutyVjpkeEabQdrOVKXKnZSvHDBYcV4seXkPU+1Tn1aQ9x",
+	"pxarmTdKlVBb8Px+Y14Jmoy2omm2R98+A9RC1m89Sb9Y5fUaNKE2g9/J0FWOCVrOGXRKZXkSzXvBjedk",
+	"UPA0RVbFnk3KgsEDyvhbMRiwBPA3BUkpmZ7cmtVW0l0hxYjdMY0qLu3UYZkFCvH0vHPwNdm7/qFz/Grf",
+	"6rVK7dlvDdOg22NdHaw6LotMUPQRKXopbMAgdU6k/4Z62BiViKqEE9QghIsx0SMpyuEIudRW8xrXwqlV",
+	"/yFT5ENJJeWacUgJ1abPIDbcLErk8Yk5WgEcDQ2mbzgdUsZPCNMkZYoWBVCpyECKnMADyAnJmNKxQaEi",
+	"TqMRhpyYEoUmy1jIe4aal2li7ERFbChHeX/QXv6GfyiFprH5mZmzjqhMOymYIBI6XPhyUcohkF/FXROy",
+	"TBEtstR8jICxaxJKcqrujXIvJuaLG24B6oLxCZWSgTJL8zK/A9klNpJmLC28PFFlkgCg63Z0cLzvTC6/",
+	"dR+h5uycENBoNLTqdFy8kjTvPGmZyNJvK65aDON/q6nlJWrBrw9ePVYkWTygZapD1sL8EPJazfOEpcA1",
+	"sqQke5STU5qOKJWOWogzSt/wlFFjju5vSXR5qTRgGajeJ9M3Nw0c/CZdnYsxR5JHTbExJdl+vQ09b5Fo",
+	"0B2lJdC8qcl8XOuOcWr6QFt69uZtsxQSOSkQ5AN7CdsPa1uK0YTunAmupciau83Hsc7sgTvnTBVCsSpx",
+	"s+yTf+9UH2GlXudHV86+9KvpS7QLDw8eyxEVBdW6xGrmvTtR8rRqjDFeHbpvQ6EJ030j4JXRI/u/idLO",
+	"oWejrB1f8tBxHo5ayC0Y9jl14dxmVdJnHuBqLRFr4bcfC+DEg+kZCPkJovrckIUyVGe1OargXEiwlYCC",
+	"k3xi7Z2UuFKYmIwpMzrcvDsh1qffUnxkGc31Pvlc0bRH63LYdqfF1cvO0OLGNFg3dj/WEth+SGCuJviZ",
+	"YwKN2p4FKsej7/cYE3gCS55iyC1IdQXcaDI25Pp4v0t+NO2tGJ10ETWMEFVJsedmxRSwMnEJK57bF357",
+	"VlxllLuDptgRXmUYx1QR11DwOyfNKzpBuGhBaJ2HrarVG4pj6xRoko7rGB2v7YuftaVRl3i2yFZ3wZ1T",
+	"YgPzP49ElfhCjW9xauMJpsqKjEfAd4T03idXkznt2TrhxXLm0jwPCGFjOqhGFO1KwNgTpv1mLQPHOsqK",
+	"kTANDpx9CdJmPs3msvJk7/qVoZ7rY5Mi72MZgvn7yBQc3EOhMSyV0fH+1skqE8M1BMlbMfy8pUhzukuL",
+	"JPmJwVjFhMPYyG8mlf4NxAoWqkBaSxVDBihOyJ5LvyOBbJcKRMl1pypwWyJNDEOe2vcv3OtbyRI2UH60",
+	"NZTPVHTNo9wmnCDtknOqqQkEszQFjoHuPs5KsRFengon131xX/d5pNGjpctZJpTRTQ69howQxebHFG+7",
+	"pzQU5LCKzfdN/RFGJAcS1Ijg005ZPJXS8Fe3VN360U56DSMaIb2YFv/GU/FEQty99YyH5PCFqS28FOZ+",
+	"HM4I44q56grDJ2PGUzHeIdH4ipROnSRWi5NkfzVErU2Xxtnp5cXrNz9dXNYFg8cHr6o/ulXAwKZYxkyB",
+	"rSSc4QhM2+hScmSVKid9w01Nh+UjM2uJknuYYJSIqhEKFlThXWJnkRidTk1VHyavQJM9P/YkJuHUk5g0",
+	"hp7EN9xnDtHrzZnW4Ivrcmg2eqiFy+73m+uaa/qVbQ2MH/1lYSDB+NRuktS4qj+tsmKc5ja3lZO9i873",
+	"pz90Do72sUrl2L7rsWYvz4Umrj7SeO2u0mZFWQs1CUlifsSsZrgoT00yMagcUG1JMVsC3TY07aWXu8wN",
+	"D5tOp7sMarXBaEFsa3W1xu8u5tWQmQaCyPG2dI68wWIxpTFyoAB5SBpyzie2qHLPKuJQXrWIoYWKOanm",
+	"vUTBCtEupW/vUzgfb2qFcAa21WCG/0wR3Fb4L9hyTYV8VlXg9X01IAZwTMu/tOmlF17eYm8wUyFlMssY",
+	"lkOpaqoNJ6C35yDUUnZhzfd1OMcOtZ2dcHeHyRAiZgrCjQaJXVUEJcVI8KoiAsskUZN0yV8DL6xPXEO0",
+	"K/5Qmk4IVVUCpr2e/IfJWX3uL6GSPBhdt6A06/MqIfcBtBnxFzuP1yr7yZYLzBv03Ptk54CtG0k7C0Y1",
+	"bkpQuM+uw2gvHP+XkIsHCIvK+64wzQX8aBpE+3aK73owXVG2VdY1VS2eyjXn1NYvJbWFbJYje01bvTao",
+	"93EBmqaQzsuqK9Azkwqfm7h2aLPWoxfXysjuSGZ+2RXaTftgRPkQrPREtVorZSdG+0TTe1AEBgNIdBX7",
+	"2SKzWeNzsalQtTsFHXjvOv9cNb2pvssCqJjY8S6EpjlzHupACq5JCuoebYBBVdZ6HnyPTCgeWAqS2DkP",
+	"2Md39O3X+wu6zqrjft4WQjDQr4XW/SWfN5r9w4S4gTI+3JKMBEtAba16y5LIrSGRKI4MfdwifUTvp/GC",
+	"gJAnwOpQWjyFAkWD/FzhryU93wYazgBBrqzmf9QFvvZzsleFU4QkM3S83ycYq8IvaPX+DbcNoab6COFE",
+	"UgHWDRBj3hb+MPk8Rw8vNuIRDu5cS2+0WkRIV5VJ9JLke7NdAa2HihARt0genhoQu/MzZfafhX3mRXrv",
+	"kx86Ou2NXefyYpO56m1+LLXV/2fJrqzm6oQvtCTr0eGm6l7W+bZjHiqimtH/LM8hZVRDNnlmqsIUVMf1",
+	"Z6zMOWJ27qIay/FF5BvfiSwLp1v2XZi8mmQSY/2p1w9oqb70jOOpOy8lgzLLTBuM8+r9PIJnTzB6D2xp",
+	"gcO5f+uztgIbI0VaiK++5rPbgbZHCoIc01M9jnhRYtjsdF739u3QxMnLTLOCSt3DNpQOSrQmtppDXUyr",
+	"yTo9K8GsssZ/UHWwclaO+Sy2O7UPVHm+omiPgxZSvNJCvkTbDLtaNn3/6w27o4+eqzz1b1Vj4rvz72Py",
+	"L+8uXqNb8e6vr8keEgZJRpDc23ZHh/CYqIRyjtoHuOuQ2mKlUXvTazNbNGPFX1x3Dl7Z/kvXZxn0hrrg",
+	"xWyPqGvrVD5bUPeG9puNnfgXv+FB86etFED+6ZJz/GW+N7NPlMhBcCCQKfhKrdOKaZaCHyaPlkthA+aa",
+	"ldvGjHjh4Sp7yqpJOa8UxRYr9l2OqGN6dpaUiVw6G0UH4zxDv6zdFSN7TC+d8GkLSEwzgnXWfas1cqYt",
+	"qHdtDK/2XY1ZUMFhxnvufUtSOlGEDrQbFRKUcsSG+rH8hA/YsLQ0t4+MTushofNTzEfCRisuoQCqq9FS",
+	"VcnteMQysGlFAzfC1A13zd7S1b74kSWu+xsrPQZ22+B4dhFmYxLaz135SlVDVyANX7/hpn7AfGQh1TVR",
+	"D0cEXfvbLRf61jevs0HYHeK2+ql6ysV4cRlIo2/nhUZDWqbpvsDuJmUffv5VHk9pBzGskk+qvLSthUHZ",
+	"NjtooQr0tPIA2avkj0okAN+iApbGP12vZ7Xhy37mntH8qMgWMr58thbVWe/IhEIsbnyjbDWygknip3/u",
+	"xGGyMqUBoZcqCttmma4lC19EhMdwPZqlFp/dLyzoeAW+sryOXVFSz32tantw0KXIGQcgewHldwZmtNo/",
+	"/n60O4EXFpgvFH6vQT+NG4LC8mcTaov0sqwev/CJg8gR6AII7s9sZwUZDqpqzd08HeP04Shw/iyU0rNR",
+	"6k5W/b8oi2eC2Rj1oyaCbbkd4fc8EOxJs0ncALH5mWFpNbQkn5AB40xhRbqfFb6TCHbrCNSlI0jandvX",
+	"phnet3C7DoXmgGQ7P4JmJoXcJabtvqp3sqL8pxkrFmv4cHq9IvSGWz8x9DFHriBVaVEUkFp2djOMcD61",
+	"cTrRMfVzqs3wauO6Gk/X/mDmVXrn0q8euHx2IyIhM+SN8DZ79U0zQeU6engZ75FW16s6Pbo3/FTd19Ee",
+	"6wLTsAtV2EEmM+6ve6F9AFfVMPekNv8tD6U92tkEGCvGW+O9rs4ioI/f+1gLdd/glrk5M3RmzIyPpNj/",
+	"C4w4wjccso78KSQGcJKZgZizE8BaJU5bFm1GwAhQfpiTtXltOG1Ite0fwgLIMmXGMm7tufIdRVaS+Lvh",
+	"RcdU4TA9WwO+5yJgboDaTeSNTcNnN9F+v247WkNMhGjo3vBrzKEo14VNTSi4Yn5I7Qfz6mGPzU4E3W8T",
+	"COh6Om5+fM5xI3Hwotzwlv/54LdNUz5reCgcj6kavF9lR2On4yr9ynQ4ZbOSA9X/vPZkjp/6NT61FwzG",
+	"pACZM6VsObMLV2dmEACnOUQnfvPp++n/DwA=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -33,6 +33,8 @@ A backup cannot be edited to remove one person, so deletion works in three ways 
 2. **Short key-store backups.** Key-store backups are kept for 35 days at most. After that, **no copy of a destroyed key exists anywhere**, and the erasure is permanent.
 3. **Replay on restore.** Within the 35 days, a restore could bring back an old key or old rows. So **every restore replays the key destruction log and the erasure log before the system opens** (section 3, step 4). Restored keys that are tombstoned are destroyed again. Restored rows of erased subjects are deleted or restricted again.
 
+4. **Revocations survive a restore too (added 2026-11-23, review of S-207; Q24).** A consent withdrawal, a history-share or other grant revocation, or a caregiver link revocation made after the backup was taken would otherwise come back as active. Each of these "stop" actions is also written to write-once storage (a revocation journal, like the erasure journal D-74) and **replayed before the service opens**. Replay applies only actions that **remove** access, never grants: after a restore the worst case is that a patient must grant something again, never that a withdrawn permission returns (K-DP-02).
+
 Clinical records under RET-02 use **care keys**, which are not destroyed at account erasure. They stay readable until their retention period ends, and are then destroyed the same way.
 
 ## 3. Restore procedure (any restore: drill, incident or DR)

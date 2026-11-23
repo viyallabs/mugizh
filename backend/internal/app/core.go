@@ -17,6 +17,7 @@ import (
 	emailfake "gitlab.com/viyallabs/mugizh/backend/internal/adapters/email/fake"
 	"gitlab.com/viyallabs/mugizh/backend/internal/adapters/geocoding"
 	gfake "gitlab.com/viyallabs/mugizh/backend/internal/adapters/geocoding/fake"
+	"gitlab.com/viyallabs/mugizh/backend/internal/adapters/keys/awskms"
 	"gitlab.com/viyallabs/mugizh/backend/internal/adapters/malwarescan"
 	msfake "gitlab.com/viyallabs/mugizh/backend/internal/adapters/malwarescan/fake"
 	paymentsadapter "gitlab.com/viyallabs/mugizh/backend/internal/adapters/payments"
@@ -25,6 +26,7 @@ import (
 	pushfake "gitlab.com/viyallabs/mugizh/backend/internal/adapters/push/fake"
 	"gitlab.com/viyallabs/mugizh/backend/internal/adapters/sms"
 	smsfake "gitlab.com/viyallabs/mugizh/backend/internal/adapters/sms/fake"
+	"gitlab.com/viyallabs/mugizh/backend/internal/adapters/storage/s3store"
 	vfake "gitlab.com/viyallabs/mugizh/backend/internal/adapters/verification/fake"
 	"gitlab.com/viyallabs/mugizh/backend/internal/adapters/video"
 	videofake "gitlab.com/viyallabs/mugizh/backend/internal/adapters/video/fake"
@@ -66,6 +68,17 @@ type Settings struct {
 	BlindIndexKey  []byte
 	LocalRootKey   []byte // local/test/dev only
 	BlobDir        string // local/test/dev only
+	// Key management and object storage (ADR-31). "local" and the local directory are for
+	// local, test and dev only; staging and production need aws-kms and s3 (see validateInfra).
+	KeyProvider    string   // MUGIZH_KEY_PROVIDER: local | aws-kms
+	KMSKeyID       string   // MUGIZH_KMS_KEY_ID: ARN or alias of the multi-region data key
+	AWSRegion      string   // AWS_REGION
+	AllowedRegions []string // MUGIZH_ALLOWED_REGIONS: comma list; AWSRegion must be one (residency, K-DP-01)
+	BlobStore      string   // MUGIZH_BLOB_STORE: local | s3
+	BlobBucket     string   // MUGIZH_BLOB_BUCKET: versioned data bucket
+	WormBucket     string   // MUGIZH_WORM_BUCKET: Object Lock bucket for write-once evidence
+	S3Endpoint     string   // MUGIZH_S3_ENDPOINT: optional, S3-compatible stores in dev only
+	S3PathStyle    bool     // MUGIZH_S3_PATH_STYLE
 	// SchedulerSecret verifies scheduler-core's signed occurrence.due callbacks (D-29).
 	SchedulerSecret []byte
 	// SchedulerURL and SchedulerToken reach scheduler-core's API; an empty URL uses the in-memory
@@ -87,7 +100,22 @@ func LoadSettings(getenv func(string) string) (Settings, error) {
 	s := Settings{Env: config.Env(getenv("APP_ENV")), HTTPAddr: getenv("HTTP_ADDR"), PackDir: getenv("MUGIZH_PACK_DIR"),
 		VendorRegister: getenv("MUGIZH_VENDOR_REGISTER"), QueueURL: getenv("MUGIZH_DB_URL_QUEUE"), KeystoreURL: getenv("MUGIZH_KEYSTORE_URL"),
 		BlobDir: getenv("MUGIZH_BLOB_DIR"), DBURL: map[string]string{}, SchedulerURL: getenv("MUGIZH_SCHEDULER_URL"), SchedulerToken: getenv("MUGIZH_SCHEDULER_TOKEN"),
-		OTLPEndpoint: getenv("MUGIZH_OTLP_ENDPOINT")}
+		OTLPEndpoint: getenv("MUGIZH_OTLP_ENDPOINT"),
+		KeyProvider:  orDefault(getenv("MUGIZH_KEY_PROVIDER"), "local"), KMSKeyID: getenv("MUGIZH_KMS_KEY_ID"),
+		AWSRegion: getenv("AWS_REGION"), BlobStore: orDefault(getenv("MUGIZH_BLOB_STORE"), "local"),
+		BlobBucket: getenv("MUGIZH_BLOB_BUCKET"), WormBucket: getenv("MUGIZH_WORM_BUCKET"), S3Endpoint: getenv("MUGIZH_S3_ENDPOINT")}
+	for _, r := range strings.Split(getenv("MUGIZH_ALLOWED_REGIONS"), ",") {
+		if r = strings.TrimSpace(r); r != "" {
+			s.AllowedRegions = append(s.AllowedRegions, r)
+		}
+	}
+	if v := getenv("MUGIZH_S3_PATH_STYLE"); v != "" {
+		b, perr := strconv.ParseBool(v)
+		if perr != nil {
+			return s, errors.New("settings: MUGIZH_S3_PATH_STYLE must be true or false")
+		}
+		s.S3PathStyle = b
+	}
 	if s.HTTPAddr == "" {
 		s.HTTPAddr = ":8080"
 	}
@@ -117,7 +145,79 @@ func LoadSettings(getenv func(string) string) (Settings, error) {
 			return s, errors.New("settings: TRUSTED_PROXIES must be 0..5")
 		}
 	}
+	if err := s.validateInfra(); err != nil {
+		return s, err
+	}
 	return s, nil
+}
+
+func orDefault(v, d string) string {
+	if v == "" {
+		return d
+	}
+	return v
+}
+
+// validateInfra checks the key provider and object storage settings. Outside local, test
+// and dev the service needs AWS KMS and S3 with two buckets in an allowed (India) region, or
+// it refuses to start: never a silent fall back to the local stand-ins (K-DP-01, K-DP-03).
+func (s Settings) validateInfra() error {
+	s.KeyProvider, s.BlobStore = orDefault(s.KeyProvider, "local"), orDefault(s.BlobStore, "local") // Settings built in code, not by LoadSettings
+	switch s.KeyProvider {
+	case "local", "aws-kms":
+	default:
+		return fmt.Errorf("settings: MUGIZH_KEY_PROVIDER %q is not one of local, aws-kms", s.KeyProvider)
+	}
+	switch s.BlobStore {
+	case "local", "s3":
+	default:
+		return fmt.Errorf("settings: MUGIZH_BLOB_STORE %q is not one of local, s3", s.BlobStore)
+	}
+	if !s.devLike() {
+		if s.KeyProvider != "aws-kms" || s.BlobStore != "s3" {
+			return fmt.Errorf("settings: %s needs MUGIZH_KEY_PROVIDER=aws-kms and MUGIZH_BLOB_STORE=s3", s.Env)
+		}
+		if s.S3Endpoint != "" {
+			return fmt.Errorf("settings: MUGIZH_S3_ENDPOINT (a custom S3 endpoint) is for local, test and dev only, not %s", s.Env)
+		}
+		if len(s.AllowedRegions) == 0 {
+			return errors.New("settings: MUGIZH_ALLOWED_REGIONS is required (the residency regions of the country pack)")
+		}
+	}
+	if s.KeyProvider == "aws-kms" && (s.KMSKeyID == "" || s.AWSRegion == "") {
+		return errors.New("settings: aws-kms needs MUGIZH_KMS_KEY_ID and AWS_REGION")
+	}
+	if s.BlobStore == "s3" {
+		if s.BlobBucket == "" || s.WormBucket == "" || s.AWSRegion == "" {
+			return errors.New("settings: s3 needs MUGIZH_BLOB_BUCKET, MUGIZH_WORM_BUCKET and AWS_REGION")
+		}
+		if s.BlobBucket == s.WormBucket {
+			return errors.New("settings: MUGIZH_BLOB_BUCKET and MUGIZH_WORM_BUCKET must differ")
+		}
+	}
+	if !s.devLike() {
+		in := false
+		for _, r := range s.AllowedRegions {
+			if r == s.AWSRegion {
+				in = true
+			}
+		}
+		if !in {
+			return fmt.Errorf("settings: AWS_REGION %q is not in MUGIZH_ALLOWED_REGIONS (data residency)", s.AWSRegion)
+		}
+	}
+	return nil
+}
+
+// refuseUnbuilt stops production until the vendor adapters exist (SMS gateway, payment
+// aggregator, video). Staging cannot start either yet: the vendor register allows fakes only in
+// local, test and dev (modules/config/vendors.go), so staging needs vendor sandboxes (V2) or
+// the founder's decision F9.
+func (s Settings) refuseUnbuilt() error {
+	if s.Env == config.EnvProduction {
+		return errors.New("start-up refused in production: the SMS gateway, payment aggregator and video adapters are not built yet (S-041)")
+	}
+	return nil
 }
 
 func b64(v string) ([]byte, error) { return base64.StdEncoding.DecodeString(strings.TrimSpace(v)) }
@@ -174,6 +274,34 @@ func (c *Core) Close() {
 	}
 }
 
+func buildKeyProvider(ctx context.Context, s Settings) (keys.Provider, error) {
+	if s.KeyProvider == "aws-kms" {
+		return awskms.New(ctx, awskms.Config{KeyID: s.KMSKeyID, Region: s.AWSRegion})
+	}
+	return keys.NewLocal(string(s.Env), s.LocalRootKey)
+}
+
+func buildBlobStore(ctx context.Context, s Settings) (blobstore.Store, error) {
+	if s.BlobStore == "s3" {
+		mk := func(bucket string) (*s3store.Store, error) {
+			return s3store.New(ctx, s3store.Config{Bucket: bucket, Region: s.AWSRegion, Endpoint: s.S3Endpoint, PathStyle: s.S3PathStyle})
+		}
+		data, err := mk(s.BlobBucket)
+		if err != nil {
+			return nil, err
+		}
+		worm, err := mk(s.WormBucket)
+		if err != nil {
+			return nil, err
+		}
+		return blobstore.Split{Worm: worm, Data: data}, nil
+	}
+	if s.BlobDir == "" {
+		return nil, errors.New("settings: MUGIZH_BLOB_DIR is required in development")
+	}
+	return blobstore.LocalDir{Root: s.BlobDir}, nil
+}
+
 // BuildCore validates configuration and builds the modules. Every failure stops start-up:
 // the service never runs on partial configuration (country-pack-model §3 rule 1).
 func BuildCore(ctx context.Context, s Settings, log *slog.Logger) (*Core, error) {
@@ -192,10 +320,14 @@ func BuildCore(ctx context.Context, s Settings, log *slog.Logger) (*Core, error)
 	if s.Catalogs != nil && !s.devLike() {
 		return nil, errors.New("start-up refused: replaced text catalogs are for tests only")
 	}
-	// Infrastructure adapters for staging and production are not built yet: refuse to
-	// start rather than fall back to development stand-ins (fail closed).
-	if !s.devLike() {
-		return nil, fmt.Errorf("start-up refused in %s: the cloud KMS, S3-compatible storage and SMS gateway adapters are not built yet (S-093, S-098, S-041)", s.Env)
+	// Key management and storage are real outside dev (validateInfra); the vendor adapters
+	// are not: production refuses here, and staging is refused by the vendor register until
+	// sandboxes exist or F9 allows the fakes.
+	if err := s.validateInfra(); err != nil {
+		return nil, err
+	}
+	if err := s.refuseUnbuilt(); err != nil {
+		return nil, err
 	}
 
 	c := &Core{Settings: s, Log: log, Config: cfg}
@@ -216,16 +348,15 @@ func BuildCore(ctx context.Context, s Settings, log *slog.Logger) (*Core, error)
 		c.Close()
 		return nil, fmt.Errorf("keystore: %w", err)
 	}
-	kp, err := keys.NewLocal(string(s.Env), s.LocalRootKey)
+	kp, err := buildKeyProvider(ctx, s)
 	if err != nil {
 		c.Close()
 		return nil, err
 	}
-	if s.BlobDir == "" {
+	if c.Blob, err = buildBlobStore(ctx, s); err != nil {
 		c.Close()
-		return nil, errors.New("settings: MUGIZH_BLOB_DIR is required in development")
+		return nil, err
 	}
-	c.Blob = blobstore.LocalDir{Root: s.BlobDir}
 	if c.Crypto, err = crypto.NewService(c.Keystore, kp, c.Blob, s.BlindIndexKey); err != nil {
 		c.Close()
 		return nil, err
@@ -258,7 +389,7 @@ func BuildCore(ctx context.Context, s Settings, log *slog.Logger) (*Core, error)
 		c.Close()
 		return nil, errors.New("legal.notice_versions needs both patient and provider versions (country pack)")
 	}
-	if c.Records, err = records.New(c.Pools.For("records"), records.Config{ConsentVersions: legal.ConsentTextVersions,
+	if c.Records, err = records.New(c.Pools.For("records"), records.Config{ConsentVersions: legal.ConsentTextVersions, CaregiversEnabled: cfg.Flag("caregivers"), // S-207, D-94
 		NoticeVersion: legal.NoticeVersions["patient"], ProviderNoticeVersion: legal.NoticeVersions["provider"], T1Window: 24 * time.Hour, JITMax: 4 * time.Hour}, log); err != nil {
 		c.Close()
 		return nil, err
@@ -407,7 +538,7 @@ func BuildCore(ctx context.Context, s Settings, log *slog.Logger) (*Core, error)
 		OrderCompliance: hours(g.OrderComplianceHours), IntimateImage: hours(g.IntimateImageRemovalHours), LawfulRequest: 72 * time.Hour,
 		MedicalRecordCopy: hours(g.MedicalRecordCopyHours), DataRightsResponse: hours(24 * g.DataRightsResponseDays),
 		DataRightsAlertAt: hours(24 * (g.DataRightsResponseDays * 2 / 3)), AlertFraction: 0.8, ProhibitedValidators: validators},
-		admin.Deps{Records: c.Records, Roles: c.Identity, Crypto: c.Crypto, Accounts: c.Identity}, log); err != nil {
+		admin.Deps{Records: c.Records, Roles: c.Identity, Crypto: c.Crypto, Accounts: c.Identity, Reverify: c.Verification}, log); err != nil {
 		c.Close()
 		return nil, err
 	}

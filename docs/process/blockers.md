@@ -14,6 +14,7 @@ What stops stories from reaching Done, who can unblock each, and what is built i
 | F4 | Accept the residual risk that an offline lost phone shows its backup reminders until it reconnects or 72 h pass | S-165 sign-off | Wipe push on remote sign-out | D-69 |
 | F5 | Rename "India" API fields to "consult country" before the first app release | API freeze | Behaviour already pack-driven | D-72 |
 | F6 | Staff sign-in method (SSO + phishing-resistant factor) | S-128, S-172 screens, staff-role attack tests in S-181 | Staff roles fail closed; support lookup API | D-21, D-57 |
+| F9 | **Fakes in staging?** Adapter rule A10 says staging uses "the fake or the vendor's sandbox", but the vendor register and `TestFakeAdaptersOnlyInLocalTestDev` allow fakes only in local, test and dev. Allow the SMS, payment, video, push, e-mail, e-sign and geocoding fakes in staging (synthetic data only) until vendor sandboxes exist, or wait for the sandboxes? Claude will not loosen the test itself (CLAUDE.md section 5.5) | Staging, and with it every story's Done (K-DOD-01) | KMS and S3 adapters built (D-93) | A10, K-DP-08 |
 | F8 | **Review moderation vs K-SEC-08 (S-213):** moderators are staff reading a patient's unpublished review text; K-SEC-08 allows staff access to patient data only through just-in-time grants (per patient, approved). Options: (a) a moderation grant type covering the queue for a shift, approved and audited; (b) treat text the patient submitted for publication as outside K-SEC-08 [needs an ADR]; (c) automatic checks only, no human reading [policy change] | S-213, review text publication | Ratings publish; text held sealed (D-81) | K-SEC-08, D-81 |
 | F7 | New [CONFIRM] items from S-178/S-185: erasure-journal retention; strictness of the link rule for names ("Dr.Kumar" refused); residual one-minute window if a journal write fails just before a restore point | Approval | Built with the proposed behaviour | D-74, D-77 |
 
@@ -33,7 +34,7 @@ What stops stories from reaching Done, who can unblock each, and what is built i
 |---|---|---|---|
 | V1 | AWS India accounts for staging, production and DR | Every story's Done (K-DOD-01: deployed to staging), S-179 ZAP, S-184 and S-185 drills | ADR §6 |
 | V2 | Vendors with processor agreements in the vendor register: SMS (DLT registration), push, email, payment aggregator, video, e-signature, malware scan, geocoding, doctor-register check | Real delivery; S-111; adapter kill switches and circuit breakers (A9, D-79); a DLT SMS template for erasure notices (TM-33) | K-DP-08, K-ARC-03 |
-| V3 | Cloud key management and S3-compatible storage adapters | Real patient data | encryption-design |
+| V3 | ~~Cloud key management and S3-compatible storage adapters~~ **Built 2026-11-23 (D-93)**; remaining: verify on staging, DR replica key | Real patient data | encryption-design |
 | V4 | PDF library ADR | Prescription and receipt PDFs (S-151, S-134) | K-DOD-03 |
 | V5 | Independent CERT-In empanelled VAPT | S-183, launch | K-SEC-07 |
 

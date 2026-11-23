@@ -152,6 +152,8 @@ type RouterConfig struct {
 	Raw []func(r chi.Router)
 	// Telemetry records a span and a duration per request (S-095); nil means none.
 	Telemetry *telemetry.Telemetry
+	// CaregiversOn reports the pack's "caregivers" flag. Nil means off: the caregiver routes answer 404 before sign-in.
+	CaregiversOn func() bool
 	// Now is the clock for policy checks (step-up age); nil means time.Now.
 	Now func() time.Time
 }
@@ -171,6 +173,10 @@ func NewRouter(c RouterConfig) http.Handler {
 	now := c.Now
 	if now == nil {
 		now = time.Now
+	}
+	careGate, err := CaregiverGate(docs, c.CaregiversOn)
+	if err != nil {
+		panic(err)
 	}
 	gate, err := PolicyGate(docs, pol, now)
 	if err != nil {
@@ -218,7 +224,7 @@ func NewRouter(c RouterConfig) http.Handler {
 		if userMin <= 0 {
 			userMin = 300
 		}
-		api.Use(httpx.RateLimitByIP(httpx.NewLimiter(perMin, perMin/4+1)), IPHasher(c.Crypto), Authn(c.Auth), RateLimitByUser(httpx.NewLimiter(userMin, userMin/4+1)),
+		api.Use(careGate, httpx.RateLimitByIP(httpx.NewLimiter(perMin, perMin/4+1)), IPHasher(c.Crypto), Authn(c.Auth), RateLimitByUser(httpx.NewLimiter(userMin, userMin/4+1)),
 			gate, c.Idempotency.Middleware(IdempotencyScope))
 		for _, m := range c.Mount {
 			m(api)

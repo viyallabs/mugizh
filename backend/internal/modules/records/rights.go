@@ -227,6 +227,7 @@ func (r *Rights) RequestRights(ctx context.Context, c rp.Caller, t rp.RightsType
 		restrictedAt = now
 	}
 	var out rp.RightsRequest
+	var affected []string
 	err := db.InTx(ctx, r.m.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `INSERT INTO rights_request (id, subject_ref, type, status, received_at, ack_due_at, due_at, acknowledged_at, details_sealed, undo_until, restricted_at)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$5,$8,$9,$10)`, id, c.UserRef, string(t), string(status), now, now.Add(r.cfg.AckWithin), now.Add(r.deadline(t)), sealed, undo, restrictedAt); err != nil {
@@ -242,8 +243,10 @@ func (r *Rights) RequestRights(ctx context.Context, c rp.Caller, t rp.RightsType
 		if err := outbox.Emit(ctx, tx, outbox.Event{Type: "rights.request_received", SubjectRef: c.UserRef, Payload: map[string]string{"requestRef": id, "rightsType": string(t)}}); err != nil {
 			return err
 		}
+		affected = nil
 		if erasure {
-			if err := r.startRestrict(ctx, tx, c.UserRef, id, now); err != nil {
+			var err error
+			if affected, err = r.startRestrict(ctx, tx, c.UserRef, id, now); err != nil {
 				return err
 			}
 		}
@@ -256,6 +259,9 @@ func (r *Rights) RequestRights(ctx context.Context, c rp.Caller, t rp.RightsType
 	}
 	if erasure {
 		r.m.Invalidate(c.UserRef)
+		for _, p := range affected { // patients this person cared for: their caregiver link just ended
+			r.m.Invalidate(p)
+		}
 		r.journal(ctx, id, journalRequested) // survives a database restore (S-185)
 		r.notice(ctx, c.UserRef, "erasure_requested", id)
 	}
@@ -264,27 +270,51 @@ func (r *Rights) RequestRights(ctx context.Context, c rp.Caller, t rp.RightsType
 
 // startRestrict is step 1 of an erasure: the account is hidden at once from the app and
 // every staff role, each module gets a task, and this module's own task is done.
-func (r *Rights) startRestrict(ctx context.Context, tx pgx.Tx, subject, id string, now time.Time) error {
+//
+// Caregiving (K-DP-07): the subject's own caregiver links are revoked and their invitations deleted, and the links
+// where the subject is the caregiver are revoked. Link rows stay as restricted evidence (RET-06 [CONFIRM]). It
+// returns the other patients whose caregiver link ended, so the caller can drop their cached decisions.
+func (r *Rights) startRestrict(ctx context.Context, tx pgx.Tx, subject, id string, now time.Time) ([]string, error) {
+	// Caregiver locks first, in the order redeem takes them (caregiver, then patient): a redeem racing this
+	// restriction, as caregiver or as patient, either finishes before it (and is revoked below) or sees it.
+	if err := lock(ctx, tx, lockCaregiver, subject); err != nil {
+		return nil, err
+	}
+	if err := lock(ctx, tx, lockPatient, subject); err != nil {
+		return nil, err
+	}
 	if _, err := tx.Exec(ctx, `INSERT INTO account_restriction (subject_ref, request_id, restricted_at) VALUES ($1,$2,$3)
 		ON CONFLICT (subject_ref) DO UPDATE SET request_id=EXCLUDED.request_id, restricted_at=EXCLUDED.restricted_at, released_at=NULL`, subject, id, now); err != nil {
-		return err
+		return nil, err
 	}
 	for _, mod := range r.cfg.Modules {
 		if _, err := tx.Exec(ctx, `INSERT INTO rights_task (request_id, step, module) VALUES ($1,1,$2)`, id, mod); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	if err := outbox.Emit(ctx, tx, outbox.Event{Type: "rights.erasure_requested", SubjectRef: subject, Payload: map[string]string{"requestRef": id, "subjectRef": subject}}); err != nil {
-		return err
+		return nil, err
 	}
 	if err := notify(ctx, tx, subject); err != nil {
-		return err
+		return nil, err
+	}
+	if err := patientCaregiverErasureStep1(ctx, tx, subject, now); err != nil {
+		return nil, err
+	}
+	affected, err := caregiverErasureStep1(ctx, tx, subject, now)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range affected {
+		if err := notify(ctx, tx, p); err != nil {
+			return nil, err
+		}
 	}
 	if _, err := tx.Exec(ctx, `UPDATE rights_task SET outcome='restricted', retention_rule='RET-18', done_at=$2 WHERE request_id=$1 AND step=1 AND module='records'`, id, now); err != nil {
-		return err
+		return nil, err
 	}
-	_, err := r.advance(ctx, tx, id)
-	return err
+	_, err = r.advance(ctx, tx, id)
+	return affected, err
 }
 
 // notice sends a notice to the phone on file. A failed notice is logged and never undoes
@@ -651,6 +681,10 @@ func (r *Rights) startFinal(ctx context.Context, id string) error {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM file_link WHERE patient_ref=$1`, subject); err != nil {
+			return err
+		}
+		// Caregiver link rows stay as evidence (RET-06); the patient's sealed labels do not.
+		if _, err := tx.Exec(ctx, `UPDATE caregiver_link SET label_sealed=NULL, label_ref=NULL WHERE patient_ref=$1`, subject); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE rights_task SET outcome='erased', retention_rule='RET-18', done_at=$2 WHERE request_id=$1 AND step=2 AND module='records'`, id, now); err != nil {

@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars (git-ignored) and fill. No secrets here: OCI credentials come from the OCI config or environment.
+tenancy_ocid            = "[FILL]"
+parent_compartment_ocid = "[FILL]"
+owner                   = "[FILL]"
+ssh_public_key          = "[FILL]"
+bastion_client_cidrs    = ["[FILL]"]
+core_image              = "[FILL]"
+core_image_tag          = "[FILL]"
+# region = "ap-hyderabad-1"   # optional; Mumbai is the default
+# docker_io_version      = "[FILL]"
+# docker_compose_version = "[FILL]"

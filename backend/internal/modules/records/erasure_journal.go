@@ -254,7 +254,8 @@ func (r *Rights) replayMissing(ctx context.Context, tx pgx.Tx, ref string, s *jo
 	// Step 1 again: hide the account and tell every module (their consumers are
 	// idempotent). The request keeps its original undo window, so its RET-18 hold is the
 	// same; if the hold has already ended, the worker starts step 2 at once.
-	return r.startRestrict(ctx, tx, e.SubjectRef, ref, e.ReceivedAt)
+	_, err := r.startRestrict(ctx, tx, e.SubjectRef, ref, e.ReceivedAt)
+	return err
 }
 
 // applyCancel releases an erasure (the patient's undo, or its replay after a restore).

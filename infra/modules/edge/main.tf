@@ -174,78 +174,6 @@ resource "aws_lb_listener" "http" {
   }
 }
 
-# Regional WAF: AWS managed common and known-bad-inputs sets, plus a rate-based rule.
-resource "aws_wafv2_web_acl" "this" {
-  name  = "${var.name}-api"
-  scope = "REGIONAL"
-  default_action {
-    allow {}
-  }
-
-  rule {
-    name     = "rate-limit-per-ip"
-    priority = 1
-    action {
-      block {}
-    }
-    statement {
-      rate_based_statement {
-        limit              = var.rate_limit_per_5min
-        aggregate_key_type = "IP"
-      }
-    }
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "rate-limit-per-ip"
-      sampled_requests_enabled   = false
-    }
-  }
-
-  rule {
-    name     = "aws-common"
-    priority = 10
-    override_action {
-      none {}
-    }
-    statement {
-      managed_rule_group_statement {
-        vendor_name = "AWS"
-        name        = "AWSManagedRulesCommonRuleSet"
-      }
-    }
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "aws-common"
-      sampled_requests_enabled   = false
-    }
-  }
-
-  rule {
-    name     = "aws-known-bad-inputs"
-    priority = 20
-    override_action {
-      none {}
-    }
-    statement {
-      managed_rule_group_statement {
-        vendor_name = "AWS"
-        name        = "AWSManagedRulesKnownBadInputsRuleSet"
-      }
-    }
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "aws-known-bad-inputs"
-      sampled_requests_enabled   = false
-    }
-  }
-
-  visibility_config {
-    cloudwatch_metrics_enabled = true
-    metric_name                = "${var.name}-api"
-    sampled_requests_enabled   = false
-  }
-}
-
 resource "aws_wafv2_web_acl_association" "this" {
   resource_arn = aws_lb.this.arn
   web_acl_arn  = aws_wafv2_web_acl.this.arn
@@ -301,5 +229,10 @@ resource "aws_wafv2_web_acl_logging_configuration" "this" {
 output "alb_dns_name" { value = aws_lb.this.dns_name }
 output "alb_zone_id" { value = aws_lb.this.zone_id }
 output "alb_arn_suffix" { value = aws_lb.this.arn_suffix }
-output "target_group_arn" { value = aws_lb_target_group.api.arn }
+# Depends on the HTTPS listener, so the ECS service is not created before the target group
+# is attached to a load balancer.
+output "target_group_arn" {
+  value      = aws_lb_target_group.api.arn
+  depends_on = [aws_lb_listener.https]
+}
 output "target_group_arn_suffix" { value = aws_lb_target_group.api.arn_suffix }

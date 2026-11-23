@@ -102,6 +102,8 @@ func run(log *slog.Logger) error {
 	go every(ctx, log, time.Minute, "records.rights_due", func(ctx context.Context) error { return core.Rights.RunDue(ctx) })
 	// AAD-05 and RET-03: hidden documents (quarantined or deleted by the patient) are hard-deleted well within 24 hours.
 	go every(ctx, log, 5*time.Minute, "records.purge_hidden_documents", func(ctx context.Context) error { _, err := core.Rights.PurgeHidden(ctx, 100); return err })
+	// Caregiver clean-up: expired wrong-code counters, and invitation rows 30 days after they expired, were redeemed or cancelled.
+	go every(ctx, log, 15*time.Minute, "records.purge_caregiving", func(ctx context.Context) error { _, _, err := core.Rights.PurgeCaregiving(ctx); return err })
 	go every(ctx, log, 15*time.Minute, "admin.grievance_due_soon", func(ctx context.Context) error {
 		alerts, err := core.Admin.DueSoon(ctx, time.Now())
 		if len(alerts) > 0 {

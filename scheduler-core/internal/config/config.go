@@ -4,6 +4,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -52,11 +53,13 @@ func Load(get Getenv, serve bool) (*Config, error) {
 	if err := dispatch.ValidateCallbackURL(c.CallbackURL, get("SCHEDULER_ALLOW_INSECURE_CALLBACK") == "1"); err != nil {
 		return nil, fmt.Errorf("config: SCHEDULER_CALLBACK_URL: %w", err)
 	}
-	secret := get("SCHEDULER_CALLBACK_HMAC_SECRET")
-	if len(secret) < 32 {
-		return nil, errors.New("config: SCHEDULER_CALLBACK_HMAC_SECRET must be at least 32 characters")
+	// The same secret value the Core API reads as MUGIZH_SCHEDULER_CALLBACK_SECRET: base64 of at
+	// least 32 random bytes, decoded the same way on both sides (D-29).
+	secret, err := base64.StdEncoding.DecodeString(strings.TrimSpace(get("SCHEDULER_CALLBACK_HMAC_SECRET")))
+	if err != nil || len(secret) < 32 {
+		return nil, errors.New("config: SCHEDULER_CALLBACK_HMAC_SECRET must be base64 of at least 32 bytes (the same value as the Core API's)")
 	}
-	c.CallbackSecret = []byte(secret)
+	c.CallbackSecret = secret
 	for _, h := range strings.Split(get("SCHEDULER_SERVICE_TOKEN_SHA256"), ",") {
 		h = strings.TrimSpace(h)
 		if h == "" {

@@ -58,6 +58,9 @@ func shareMessageTemplates() []notifications.Template {
 		// The doctor hears the decision in the pro app (D-73).
 		pro(t("share.extension_approved", "notif.sharing.extension_approved", req)),
 		pro(t("share.extension_declined", "notif.sharing.extension_declined", req)),
+		// A caregiver accepted the patient's invitation: neutral push, no name, no scopes (K-DP-09).
+		{Key: "caregiver.linked", MessageType: "caregiving", Category: np.Service, Priority: np.Normal, Channels: []notifications.Channel{notifications.Push},
+			TitleKey: "notif.caregiving.title", BodyKey: "notif.caregiving.linked", LinkScreen: "caregiving"},
 		// AAD-05: the patient hears that a document was hidden for a prohibited identifier and will be deleted.
 		{Key: "document.quarantined", MessageType: "documents", Category: np.Service, Priority: np.Normal, Channels: []notifications.Channel{notifications.Push},
 			TitleKey: "notif.documents.title", BodyKey: "notif.documents.quarantined", LinkScreen: "documents"},
@@ -114,4 +117,15 @@ func (s *shareMessages) OnDocumentQuarantined(ctx context.Context, e outbox.Even
 	}
 	return s.deliver(ctx, np.Request{TemplateKey: "document.quarantined", RecipientRef: patient, Category: np.Service, Reason: "records.quarantine",
 		DedupeKey: "document.quarantined:" + doc})
+}
+
+// OnCaregiverLinked: caregiving.linked {linkRef}; the subject is the patient. The message names nobody and no scope.
+func (s *shareMessages) OnCaregiverLinked(ctx context.Context, e outbox.Event) error {
+	link, patient := e.Payload["linkRef"], e.SubjectRef
+	if !ids.Valid(link) || !ids.Valid(patient) {
+		s.log.Error("notify.event_incomplete", "event_id", e.ID, "template", "caregiver.linked")
+		return nil
+	}
+	return s.deliver(ctx, np.Request{TemplateKey: "caregiver.linked", RecipientRef: patient, Category: np.Service, Reason: "caregiving.linked",
+		DedupeKey: "caregiver.linked:" + link})
 }

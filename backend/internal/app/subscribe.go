@@ -10,6 +10,7 @@ import (
 	ip "gitlab.com/viyallabs/mugizh/backend/internal/modules/identity/public"
 	pp "gitlab.com/viyallabs/mugizh/backend/internal/modules/payments/public"
 	"gitlab.com/viyallabs/mugizh/backend/internal/modules/records"
+	rp "gitlab.com/viyallabs/mugizh/backend/internal/modules/records/public"
 	rvp "gitlab.com/viyallabs/mugizh/backend/internal/modules/reviews/public"
 	"gitlab.com/viyallabs/mugizh/backend/internal/platform/outbox"
 )
@@ -82,6 +83,7 @@ func Subscribe(bus *outbox.Bus, c *Core) {
 	// hears the decision.
 	bus.Subscribe("notify.share_extension_requested", "share.extension_requested", c.ShareMsgs.OnExtensionRequested)
 	bus.Subscribe("notify.share_extension_decided", "share.extension_decided", c.ShareMsgs.OnExtensionDecided)
+	bus.Subscribe("notify.caregiver_linked", rp.EventCaregiverLinked, c.ShareMsgs.OnCaregiverLinked)
 	bus.Subscribe("notify.document_quarantined", records.EventDocumentQuarantined, c.ShareMsgs.OnDocumentQuarantined)
 	// Clinical: after signing or amending, T2, reminders (only with P-REMIND) and the patient notice.
 	bus.Subscribe("clinical.on_prescription_signed", "prescription.signed", c.Rx.HandleSigned)

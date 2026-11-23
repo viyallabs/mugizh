@@ -19,7 +19,7 @@ import (
 
 func TestMain(m *testing.M) { testkit.Main(m) }
 
-var versions = map[string]int{"P-ACCOUNT": 1, "P-CARE": 2, "P-RECORD": 2, "P-REMIND": 2, "P-SHARE": 1, "P-MEDNAMES": 1}
+var versions = map[string]int{"P-ACCOUNT": 1, "P-CARE": 2, "P-RECORD": 2, "P-REMIND": 2, "P-SHARE": 1, "P-MEDNAMES": 1, "P-CAREGIVER": 1}
 
 type fx struct {
 	env    *testkit.Env

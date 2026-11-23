@@ -322,9 +322,21 @@ resource "aws_s3_bucket_replication_configuration" "this" {
   depends_on = [aws_s3_bucket_versioning.this, aws_iam_role_policy.replication]
 }
 
-output "blobs_bucket_arn" { value = aws_s3_bucket.this["blobs"].arn }
+# Outputs wait for the settings other resources rely on: replication and the ALB must not be
+# created before versioning, Object Lock and the bucket policy exist.
+output "blobs_bucket_arn" {
+  value      = aws_s3_bucket.this["blobs"].arn
+  depends_on = [aws_s3_bucket_versioning.this, aws_s3_bucket_public_access_block.this]
+}
 output "blobs_bucket_name" { value = aws_s3_bucket.this["blobs"].id }
-output "worm_bucket_arn" { value = aws_s3_bucket.this["worm"].arn }
+output "worm_bucket_arn" {
+  value      = aws_s3_bucket.this["worm"].arn
+  depends_on = [aws_s3_bucket_versioning.this, aws_s3_bucket_object_lock_configuration.worm, aws_s3_bucket_public_access_block.this]
+}
 output "worm_bucket_name" { value = aws_s3_bucket.this["worm"].id }
 output "logs_bucket_arn" { value = aws_s3_bucket.this["logs"].arn }
-output "logs_bucket_name" { value = aws_s3_bucket.this["logs"].id }
+output "logs_bucket_name" {
+  description = "Available only after the bucket policy that lets the load balancer write logs."
+  value       = aws_s3_bucket.this["logs"].id
+  depends_on  = [aws_s3_bucket_policy.this]
+}

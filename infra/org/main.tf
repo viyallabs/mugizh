@@ -1,6 +1,8 @@
 # R1: an organisation-level policy that denies every action outside the two India regions.
 # Global services have no region (or live in us-east-1), so they are exempt through NotAction.
 # This guards against a console or CLI mistake creating a resource abroad.
+# CloudFront is not exempt (no CDN yet). To add a CDN later, add "cloudfront:*" (and the us-east-1 WAF and ACM calls it needs) after the founder agrees [CONFIRM].
+# account:EnableRegion and DisableRegion are not exempt, so only the management account (not bound by SCPs) can change regions.
 # [VALIDATE] the exemption list against the services actually used before attaching to production.
 
 data "aws_iam_policy_document" "region_deny" {
@@ -12,14 +14,14 @@ data "aws_iam_policy_document" "region_deny" {
       "organizations:*",
       "route53:*",
       "route53domains:*",
-      "cloudfront:*",
       "waf:*",
       "sts:*",
       "support:*",
       "trustedadvisor:*",
       "budgets:*",
       "ce:*",
-      "account:*",
+      "account:Get*",
+      "account:List*",
       "health:*",
     ]
     resources = ["*"]

@@ -13,12 +13,14 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	ap "gitlab.com/viyallabs/mugizh/backend/internal/modules/audit/public"
+	ip "gitlab.com/viyallabs/mugizh/backend/internal/modules/identity/public"
 	rp "gitlab.com/viyallabs/mugizh/backend/internal/modules/records/public"
 	"gitlab.com/viyallabs/mugizh/backend/internal/platform/db"
 	"gitlab.com/viyallabs/mugizh/backend/internal/platform/ids"
@@ -54,6 +56,9 @@ type Config struct {
 	// ProviderNoticeVersion is the provider privacy notice in force (pack legal.notice_versions
 	// "provider"), shown with the D-* purposes of doctors, clinics and staff (S-275).
 	ProviderNoticeVersion string
+	// CaregiversEnabled turns the caregiver endpoints on (pack feature "caregivers", v1.1). Off: the
+	// handlers answer 404. The gate itself never trusts the flag: with no link there is no access.
+	CaregiversEnabled bool
 }
 
 // neededPurposes can only be withdrawn by closing the account (consent-design §5).
@@ -79,6 +84,17 @@ var roleKinds = map[string][]rp.DataKind{
 	"ops":               {rp.KindBooking, rp.KindPayment},
 	"grievance_officer": {rp.KindBooking, rp.KindPayment, rp.KindIdentityBasic, rp.KindClinicalCurrent, rp.KindClinicalOwn, rp.KindClinicalHistory, rp.KindDocuments},
 	"security_owner":    {rp.KindBooking, rp.KindPayment, rp.KindIdentityBasic, rp.KindClinicalCurrent, rp.KindClinicalOwn, rp.KindClinicalHistory, rp.KindDocuments},
+	// A caregiver reads only what the patient's link scopes name (kindScope). Never clinical notes, never JIT-only kinds.
+	ip.RoleCaregiver: {rp.KindBooking, rp.KindReminders, rp.KindPrescriptions, rp.KindDocuments},
+}
+
+// kindScope maps each data kind a caregiver may ever read to the scope that allows it. A kind that is not here is
+// refused for caregivers (deny by default): identity, clinical notes of any kind, payments.
+var kindScope = map[rp.DataKind]string{
+	rp.KindReminders:     rp.ScopeReminders,
+	rp.KindBooking:       rp.ScopeAppointments,
+	rp.KindPrescriptions: rp.ScopePrescriptions,
+	rp.KindDocuments:     rp.ScopeDocuments,
 }
 
 var staffRoles = map[string]bool{"support": true, "ops": true, "grievance_officer": true, "security_owner": true}
@@ -109,7 +125,15 @@ type Module struct {
 	roles RoleChecker
 	// Alert is called when break-glass access is granted (access-control-design §5).
 	Alert func(ctx context.Context, code string)
+	// caregivers is the pack's "caregivers" flag (Config.CaregiversEnabled).
+	caregivers atomic.Bool
 }
+
+// CaregiversEnabled reports whether caregiver access is on in this country.
+func (m *Module) CaregiversEnabled() bool { return m.caregivers.Load() }
+
+// SetCaregiversEnabled sets the flag after construction (the composition root and tests).
+func (m *Module) SetCaregiversEnabled(on bool) { m.caregivers.Store(on) }
 
 type snapshot struct {
 	states map[string]rp.ConsentState
@@ -117,6 +141,13 @@ type snapshot struct {
 	exp    time.Time
 	// erasing is true while the account is restricted by an erasure request (RET-18 hold).
 	erasing bool
+	// carers are the patient's active caregiver links (id, caregiver, scopes).
+	carers []carerLink
+}
+
+type carerLink struct {
+	id, caregiver string
+	scopes        []string
 }
 
 // New builds the module. pool must use the records role.
@@ -130,7 +161,9 @@ func New(pool *pgxpool.Pool, cfg Config, log *slog.Logger) (*Module, error) {
 	if cfg.CacheTTL <= 0 || cfg.CacheTTL > 60*time.Second {
 		cfg.CacheTTL = 5 * time.Second
 	}
-	return &Module{pool: pool, cfg: cfg, log: log, now: time.Now, cache: map[string]snapshot{}, gen: map[string]uint64{}, Alert: func(context.Context, string) {}}, nil
+	m := &Module{pool: pool, cfg: cfg, log: log, now: time.Now, cache: map[string]snapshot{}, gen: map[string]uint64{}, Alert: func(context.Context, string) {}}
+	m.caregivers.Store(cfg.CaregiversEnabled)
+	return m, nil
 }
 
 // SetClock replaces the clock (tests).
@@ -225,6 +258,14 @@ func (m *Module) prepareConsent(c rp.ConsentChange, action string) (rp.ConsentCh
 
 // writeConsent writes a prepared change, its audit event and its event in the transaction.
 func (m *Module) writeConsent(ctx context.Context, tx pgx.Tx, c rp.ConsentChange, action string) error {
+	// Withdrawing P-CAREGIVER takes the patient lock first, so a redeem or an invitation that is running either
+	// finishes before the withdrawal (and is revoked by it) or sees the withdrawal and refuses (same lock order as
+	// redeem: caregiver, network, patient).
+	if action == "withdraw" && c.PurposeID == purposeCaregiver {
+		if err := lock(ctx, tx, lockPatient, c.SubjectRef); err != nil {
+			return err
+		}
+	}
 	now := m.now().UTC()
 	if _, err := tx.Exec(ctx, `INSERT INTO consent_record (id, subject_ref, given_by_ref, purpose_id, text_version, notice_version, action, channel, occurred_at)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`, ids.New(), c.SubjectRef, c.GivenByRef, c.PurposeID, c.TextVersion, c.NoticeVersion, action, c.Channel, now); err != nil {
@@ -249,6 +290,12 @@ func (m *Module) writeConsent(ctx context.Context, tx pgx.Tx, c rp.ConsentChange
 	}
 	if err := outbox.Emit(ctx, tx, outbox.Event{Type: evType, SubjectRef: c.SubjectRef, Payload: map[string]string{"purposeId": c.PurposeID}}); err != nil {
 		return err
+	}
+	// Withdrawing P-CAREGIVER ends every caregiver link and open invitation at once, in this transaction.
+	if action == "withdraw" && c.PurposeID == purposeCaregiver {
+		if err := endAllCaregiving(ctx, tx, c.SubjectRef, c.SubjectRef, "patient", now, c.RequestID, "consent_withdrawn"); err != nil {
+			return err
+		}
 	}
 	return notify(ctx, tx, c.SubjectRef)
 }
@@ -622,6 +669,9 @@ func (m *Module) decide(ctx context.Context, r rp.Request) (rp.Decision, error) 
 	if err != nil {
 		return rp.Decision{}, err
 	}
+	if r.Actor.Role == ip.RoleCaregiver {
+		return m.decideCaregiver(s, r), nil
+	}
 	now := m.now()
 	related, expired, outOfScope, expiredCovering := false, false, false, false
 	for _, g := range s.grants {
@@ -666,6 +716,42 @@ func (m *Module) decide(ctx context.Context, r rp.Request) (rp.Decision, error) 
 		return deny("grant_expired", false), nil
 	}
 	return deny("no_active_grant", false), nil
+}
+
+// decideCaregiver is the caregiver tier (v1.1, E-FAM-02). Allowed only for an active link of this actor with this
+// patient, a kind that maps to a scope on that link, and while the patient's P-CAREGIVER consent is granted. A
+// patient under an erasure restriction is hidden from caregivers too. Anything unmapped is refused.
+func (m *Module) decideCaregiver(s snapshot, r rp.Request) rp.Decision {
+	deny := func(reason string, hide bool) rp.Decision { return rp.Decision{Reason: reason, Hide: hide} }
+	scope, ok := kindScope[r.Kind]
+	if !ok {
+		return deny("role_not_allowed", true)
+	}
+	if s.erasing {
+		return deny("no_relationship", true) // hidden from every role (RET-18)
+	}
+	var link *carerLink
+	for i := range s.carers {
+		if s.carers[i].caregiver == r.Actor.Ref {
+			link = &s.carers[i]
+			break
+		}
+	}
+	if link == nil {
+		return deny("no_relationship", true)
+	}
+	if !slices.Contains(link.scopes, scope) {
+		return deny("out_of_scope", false)
+	}
+	if st, ok := s.states["P-CAREGIVER"]; !ok || !st.Granted {
+		return deny("purpose_not_granted", false)
+	}
+	if r.Purpose != "" {
+		if st, ok := s.states[r.Purpose]; !ok || !st.Granted {
+			return deny("purpose_not_granted", false)
+		}
+	}
+	return rp.Decision{Allowed: true, Tier: rp.Caregiver, GrantID: link.id}
 }
 
 // relates reports whether the grant is held by this actor (or the actor's clinic, for
@@ -714,7 +800,7 @@ func (m *Module) snapshot(ctx context.Context, patient string) (snapshot, error)
 	s := snapshot{states: map[string]rp.ConsentState{}}
 	// One consistent view of consents and grants.
 	err := db.InTx(ctx, m.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
-		s.states, s.grants = map[string]rp.ConsentState{}, nil
+		s.states, s.grants, s.carers = map[string]rp.ConsentState{}, nil, nil
 		rows, err := tx.Query(ctx, `SELECT purpose_id, granted, text_version, updated_at FROM consent_state WHERE subject_ref=$1`, patient)
 		if err != nil {
 			return err
@@ -760,7 +846,19 @@ func (m *Module) snapshot(ctx context.Context, patient string) (snapshot, error)
 			return err
 		}
 		s.erasing = n > 0
-		return nil
+		crows, err := tx.Query(ctx, `SELECT id::text, caregiver_ref::text, scopes FROM caregiver_link WHERE patient_ref=$1 AND status='active'`, patient)
+		if err != nil {
+			return err
+		}
+		defer crows.Close()
+		for crows.Next() {
+			var c carerLink
+			if err := crows.Scan(&c.id, &c.caregiver, &c.scopes); err != nil {
+				return err
+			}
+			s.carers = append(s.carers, c)
+		}
+		return crows.Err()
 	})
 	if err != nil {
 		return s, err

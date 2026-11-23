@@ -1,0 +1,21 @@
+# Accepted findings in the CI-only deploy tool image (D-91). Reason for every line: CI-only tool image, upstream
+# binary we cannot rebuild, not shipped with the product. Each entry expires 2026-12-23 (30 days from 2026-11-23):
+# on expiry the deployimage job fails again until the tool is bumped or the entry is re-reviewed.
+# Debian packages are never listed here; they are fixed by the Dockerfile's snapshot and upgrade.
+
+# crane 0.22.1 (Go standard library of the upstream build, latest release)
+CVE-2026-111943 exp:2026-12-23
+CVE-2026-78667 exp:2026-12-23
+CVE-2026-97031 exp:2026-12-23
+# crane 0.22.1 and OpenTofu 1.13.9 (Go standard library / golang.org/x/net)
+CVE-2026-78669 exp:2026-12-23
+
+# OpenTofu 1.13.9 (newest release line, latest patch; dependencies of the upstream build)
+CVE-2026-116587 exp:2026-12-23
+CVE-2026-56864 exp:2026-12-23
+CVE-2026-56865 exp:2026-12-23
+CVE-2026-78661 exp:2026-12-23
+CVE-2026-84445 exp:2026-12-23
+
+# AWS CLI v2.31.0 bundle (python wheel 0.45.1 inside the vendored distribution)
+CVE-2026-24049 exp:2026-12-23

@@ -28,6 +28,11 @@ variable "certificate_arn" {
   type        = string
 }
 
+variable "api_public_url" {
+  description = "Public HTTPS base URL of the API, no trailing slash [FILL]. scheduler-core calls back to it through the ALB. The host must be on the egress allow-list."
+  type        = string
+}
+
 variable "image_tag" {
   description = "Release image tag to run [FILL]."
   type        = string

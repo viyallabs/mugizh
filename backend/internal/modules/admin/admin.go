@@ -83,6 +83,8 @@ type Deps struct {
 	// Accounts finds an account by phone for the support lookup (S-172); nil means lookups are
 	// unavailable (fail closed).
 	Accounts ip.AccountLookup
+	// Reverify starts a complaint-triggered re-verification (TM-31); nil refuses referrals.
+	Reverify Reverifier
 }
 
 // Module is the admin module.

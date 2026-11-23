@@ -106,7 +106,7 @@ legal:
     medical_record_copy_hours: 72  # IMC Regulations 2002 reg. 1.3.2 [VALIDATE]
     appeal: gac.gov.in
   notice_versions: { patient: PN-1.0-draft, provider: PPN-1.0-draft }
-  consent_text_versions: { P-ACCOUNT: 1, P-CARE: 2, P-RECORD: 2, P-REMIND: 2, P-SHARE: 1, P-MEDNAMES: 1, P-ANALYTICS: 1, P-NEWS: 1, D-VERIFY: 1, D-PROFILE: 1, D-ANALYTICS: 1, D-STAFF: 1, TELE-CONSENT: 2 }  # TELE-CONSENT@2: consent-texts.md section C (R-02)
+  consent_text_versions: { P-ACCOUNT: 1, P-CARE: 2, P-RECORD: 2, P-REMIND: 2, P-SHARE: 1, P-MEDNAMES: 1, P-ANALYTICS: 1, P-NEWS: 1, P-CAREGIVER: 1, D-VERIFY: 1, D-PROFILE: 1, D-ANALYTICS: 1, D-STAFF: 1, TELE-CONSENT: 2 }  # TELE-CONSENT@2: consent-texts.md section C (R-02)
 
 adapters:                           # each must be in the vendor register (adapter rule A3)
   payments: "[S-040]"
@@ -126,4 +126,5 @@ features:
   sos: false                        # v1.1
   family_profiles: false            # v1.1; child profiles also need CH-11 protocol
   prescription_scan: false          # v1.1
-  reviews: false                    # v1.1; F15 reviews and ratings (S-209, S-214); on only after S-213 moderation and the review policy are approved [CONFIRM]
+  caregivers: false                 # v1.1; caregiver access (P-CAREGIVER); caregivers outside India is open decision 15 [CONFIRM]
+  reviews: false                   # v1.1; F15 reviews and ratings (S-209, S-214); on only after S-213 moderation and the review policy are approved [CONFIRM]

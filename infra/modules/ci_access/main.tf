@@ -2,11 +2,13 @@
 # One deploy role per environment (each environment is its own AWS account). The role is
 # trusted only for this project and only for the refs in allowed_subjects:
 #   staging    : the protected branch (project_path:<path>:ref_type:branch:ref:main)
-#   production : protected tags only  (project_path:<path>:ref_type:tag:ref:v*)
+#   production : protected release tags only, v0* to v9* (project_path:<path>:ref_type:tag:ref:v1*).
+#                IAM StringLike has no character classes, so v[0-9]* is written as ten patterns
 # GitLab must mark that branch and those tags protected, and the job must request an id_token
 # with the audience below. [VALIDATE] the sub format against the GitLab version in use.
-# This role deploys the application. It cannot change infrastructure (tofu apply is a
-# separate, manual, break-glass-approved step).
+# This role deploys the application (tools/ci/deploy.sh, S-094) and holds exactly the calls that script
+# makes. It cannot change infrastructure (tofu apply is a separate manual job with its own role,
+# not built here).
 
 variable "name" {
   type = string
@@ -38,9 +40,9 @@ variable "ref_type" {
   }
 }
 
-variable "ref_pattern" {
-  description = "Allowed ref name or pattern: main for staging, v* for production release tags."
-  type        = string
+variable "ref_patterns" {
+  description = "Allowed ref names or patterns (IAM StringLike supports only * and ?): [\"main\"] for staging, v0* to v9* for production release tags."
+  type        = list(string)
 }
 
 variable "create_oidc_provider" {
@@ -62,8 +64,9 @@ variable "service_arns" {
   type = list(string)
 }
 
-variable "migrate_task_family" {
-  type = string
+variable "migrate_task_families" {
+  description = "Families of the one-off migrate task definitions the role may run."
+  type        = list(string)
 }
 
 variable "role_arns_to_pass" {
@@ -75,9 +78,14 @@ variable "ecr_repository_arns" {
   type = list(string)
 }
 
-variable "migrate_log_group_arn" {
-  description = "Log group of the migrate task, readable by the deploy role to show results."
+variable "alerts_topic_arn" {
+  description = "SNS alerts topic (modules/observability) that receives the CI-role and task-definition alerts."
   type        = string
+}
+
+variable "task_families" {
+  description = "Families of all task definitions the deploy script registers new revisions of (api, worker, scheduler-core, migrate, scheduler-migrate)."
+  type        = list(string)
 }
 
 data "aws_region" "current" {}
@@ -111,7 +119,7 @@ data "aws_iam_policy_document" "trust" {
     condition {
       test     = "StringLike"
       variable = "${var.gitlab_host}:sub"
-      values   = ["project_path:${var.project_path}:ref_type:${var.ref_type}:ref:${var.ref_pattern}"]
+      values   = [for p in var.ref_patterns : "project_path:${var.project_path}:ref_type:${var.ref_type}:ref:${p}"]
     }
   }
 }
@@ -129,10 +137,16 @@ data "aws_iam_policy_document" "deploy" {
     sid = "NoResourceLevelSupport"
     actions = [
       "ecr:GetAuthorizationToken",
-      "ecs:RegisterTaskDefinition", "ecs:DeregisterTaskDefinition",
+      "ecs:RegisterTaskDefinition",
       "ecs:DescribeTaskDefinition",
     ]
     resources = ["*"]
+  }
+  # The script copies the tags of the current revision to the new one (describe with TAGS, register with tags).
+  statement {
+    sid       = "TagTaskDefinitions"
+    actions   = ["ecs:TagResource", "ecs:ListTagsForResource"]
+    resources = [for f in var.task_families : "arn:aws:ecs:${local.region}:${local.account}:task-definition/${f}:*"]
   }
   statement {
     sid       = "EcrPush"
@@ -147,7 +161,7 @@ data "aws_iam_policy_document" "deploy" {
   statement {
     sid       = "RunMigrateTask"
     actions   = ["ecs:RunTask"]
-    resources = ["arn:aws:ecs:${local.region}:${local.account}:task-definition/${var.migrate_task_family}:*"]
+    resources = [for f in var.migrate_task_families : "arn:aws:ecs:${local.region}:${local.account}:task-definition/${f}:*"]
     condition {
       test     = "ArnEquals"
       variable = "ecs:cluster"
@@ -156,7 +170,7 @@ data "aws_iam_policy_document" "deploy" {
   }
   statement {
     sid       = "ObserveTasks"
-    actions   = ["ecs:DescribeTasks", "ecs:StopTask"]
+    actions   = ["ecs:DescribeTasks"]
     resources = ["arn:aws:ecs:${local.region}:${local.account}:task/*/*"]
     condition {
       test     = "ArnEquals"
@@ -173,11 +187,6 @@ data "aws_iam_policy_document" "deploy" {
       variable = "iam:PassedToService"
       values   = ["ecs-tasks.amazonaws.com"]
     }
-  }
-  statement {
-    sid       = "ReadMigrateLogs"
-    actions   = ["logs:GetLogEvents", "logs:DescribeLogStreams"]
-    resources = ["${var.migrate_log_group_arn}:*"]
   }
 }
 

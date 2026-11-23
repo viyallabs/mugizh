@@ -46,6 +46,7 @@ type fx struct {
 	accts  accounts
 	now    time.Time
 	alerts []string
+	rev    *reverifyFake
 }
 
 func rnd(n int) []byte { b := make([]byte, n); _, _ = rand.Read(b); return b }
@@ -60,7 +61,7 @@ func setup(t *testing.T) *fx {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &fx{env: env, roles: roles{}, accts: accounts{}, now: time.Date(2026, 11, 17, 4, 0, 0, 0, time.UTC)}
+	f := &fx{env: env, roles: roles{}, accts: accounts{}, now: time.Date(2026, 11, 17, 4, 0, 0, 0, time.UTC), rev: &reverifyFake{}}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	f.rec, err = records.New(env.Pools.For("records"), records.Config{ConsentVersions: map[string]int{"P-ACCOUNT": 1, "P-CARE": 2, "P-RECORD": 2},
 		T1Window: day, JITMax: 4 * time.Hour, CacheTTL: time.Second}, log)
@@ -75,7 +76,7 @@ func setup(t *testing.T) *fx {
 		OrderCompliance: 3 * time.Hour, IntimateImage: 2 * time.Hour, LawfulRequest: 72 * time.Hour, MedicalRecordCopy: 72 * time.Hour,
 		DataRightsResponse: 15 * day, DataRightsAlertAt: 10 * day, AlertFraction: 0.8, ProhibitedValidators: []string{"verhoeff_12_digit_first_2_to_9", "digits_16"},
 		LookupsPerHour: 3,
-	}, admin.Deps{Records: f.rec, Roles: f.roles, Crypto: cr, Accounts: f.accts}, log)
+	}, admin.Deps{Records: f.rec, Roles: f.roles, Crypto: cr, Accounts: f.accts, Reverify: f.rev}, log)
 	if err != nil {
 		t.Fatal(err)
 	}

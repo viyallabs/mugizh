@@ -197,10 +197,12 @@ resource "aws_route_table_association" "data" {
   route_table_id = aws_route_table.data.id
 }
 
-# Security groups.
+# Security groups. Core tasks and scheduler-core tasks have separate groups, so scheduler-core
+# can reach only HTTPS (AWS endpoints, and the core API through the public ALB) and the core
+# database port. It has no route to the key-store database (that group admits core tasks only).
 resource "aws_security_group" "app" {
   name_prefix = "${var.name}-app-"
-  description = "ECS tasks (api, worker, scheduler-core, migrate)"
+  description = "Core ECS tasks (api, worker, migrate)"
   vpc_id      = aws_vpc.this.id
   tags        = { Name = "${var.name}-app" }
   lifecycle {
@@ -208,12 +210,33 @@ resource "aws_security_group" "app" {
   }
 }
 
+resource "aws_security_group" "scheduler" {
+  name_prefix = "${var.name}-scheduler-"
+  description = "scheduler-core tasks (scheduler-core, scheduler-migrate)"
+  vpc_id      = aws_vpc.this.id
+  tags        = { Name = "${var.name}-scheduler" }
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 # Tasks need outbound HTTPS to AWS endpoints (inside the VPC) and to vendors (through NAT).
 # The internet-bound part is limited by the egress firewall (TM-41) where enabled.
+# scheduler-core also uses it to call the core API through the public ALB (callback).
 #trivy:ignore:AVD-AWS-0104
 resource "aws_vpc_security_group_egress_rule" "app_https_out" {
   security_group_id = aws_security_group.app.id
   description       = "HTTPS to AWS endpoints and allow-listed vendors"
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
+#trivy:ignore:AVD-AWS-0104
+resource "aws_vpc_security_group_egress_rule" "scheduler_https_out" {
+  security_group_id = aws_security_group.scheduler.id
+  description       = "HTTPS to AWS endpoints and to the core API through the public ALB"
   ip_protocol       = "tcp"
   from_port         = 443
   to_port           = 443
@@ -229,18 +252,28 @@ resource "aws_vpc_security_group_egress_rule" "app_postgres_out" {
   cidr_ipv4         = var.cidr
 }
 
-resource "aws_vpc_security_group_ingress_rule" "app_internal" {
+resource "aws_vpc_security_group_egress_rule" "scheduler_postgres_out" {
+  security_group_id = aws_security_group.scheduler.id
+  description       = "PostgreSQL to the VPC (data subnets); the key-store database does not admit this group"
+  ip_protocol       = "tcp"
+  from_port         = 5432
+  to_port           = 5432
+  cidr_ipv4         = var.cidr
+}
+
+# Core tasks call scheduler-core (Service Connect) on 8081.
+resource "aws_vpc_security_group_egress_rule" "app_to_scheduler" {
   security_group_id            = aws_security_group.app.id
-  description                  = "Service-to-service traffic between tasks (scheduler-core)"
+  description                  = "Core to scheduler-core"
   ip_protocol                  = "tcp"
   from_port                    = 8081
   to_port                      = 8081
-  referenced_security_group_id = aws_security_group.app.id
+  referenced_security_group_id = aws_security_group.scheduler.id
 }
 
-resource "aws_vpc_security_group_egress_rule" "app_internal_out" {
-  security_group_id            = aws_security_group.app.id
-  description                  = "Service-to-service traffic between tasks (scheduler-core)"
+resource "aws_vpc_security_group_ingress_rule" "scheduler_from_app" {
+  security_group_id            = aws_security_group.scheduler.id
+  description                  = "From core tasks"
   ip_protocol                  = "tcp"
   from_port                    = 8081
   to_port                      = 8081
@@ -258,12 +291,58 @@ resource "aws_security_group" "endpoints" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "endpoints_https" {
+  for_each                     = { app = aws_security_group.app.id, scheduler = aws_security_group.scheduler.id }
   security_group_id            = aws_security_group.endpoints.id
-  description                  = "HTTPS from the app tier"
+  description                  = "HTTPS from the ${each.key} tier"
   ip_protocol                  = "tcp"
   from_port                    = 443
   to_port                      = 443
-  referenced_security_group_id = aws_security_group.app.id
+  referenced_security_group_id = each.value
+}
+
+# Endpoint policies (L6): only principals and buckets of this account. [VALIDATE] on first
+# apply: ECR pulls also read layers from an AWS-owned bucket, which is allowed explicitly.
+data "aws_iam_policy_document" "endpoint_s3" {
+  statement {
+    sid       = "ThisAccountBucketsOnly"
+    actions   = ["s3:*"]
+    resources = ["*"]
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+  }
+  statement {
+    sid       = "EcrLayerBucket"
+    actions   = ["s3:GetObject"]
+    resources = ["arn:aws:s3:::prod-${data.aws_region.current.name}-starport-layer-bucket/*"]
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+  }
+}
+
+data "aws_iam_policy_document" "endpoint_interface" {
+  statement {
+    sid       = "ThisAccountPrincipalsOnly"
+    actions   = ["*"]
+    resources = ["*"]
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:PrincipalAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+  }
 }
 
 # VPC endpoints: AWS API traffic stays on the private network.
@@ -272,6 +351,7 @@ resource "aws_vpc_endpoint" "s3" {
   service_name      = "com.amazonaws.${data.aws_region.current.name}.s3"
   vpc_endpoint_type = "Gateway"
   route_table_ids   = concat([for rt in aws_route_table.app : rt.id], [aws_route_table.data.id])
+  policy            = data.aws_iam_policy_document.endpoint_s3.json
   tags              = { Name = "${var.name}-s3" }
 }
 
@@ -283,6 +363,7 @@ resource "aws_vpc_endpoint" "interface" {
   subnet_ids          = [for s in aws_subnet.app : s.id]
   security_group_ids  = [aws_security_group.endpoints.id]
   private_dns_enabled = true
+  policy              = data.aws_iam_policy_document.endpoint_interface.json
   tags                = { Name = "${var.name}-${each.key}" }
 }
 

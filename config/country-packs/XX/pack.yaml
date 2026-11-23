@@ -98,7 +98,7 @@ legal:
     medical_record_copy_hours: 96
     appeal: appeal.example.invalid
   notice_versions: { patient: XX-PN-1.0, provider: XX-PPN-1.0 }
-  consent_text_versions: { P-ACCOUNT: 3, P-CARE: 1, P-RECORD: 1, P-REMIND: 1, P-SHARE: 2, P-MEDNAMES: 1, P-ANALYTICS: 1, P-NEWS: 1, D-VERIFY: 2, D-PROFILE: 1, D-ANALYTICS: 1, D-STAFF: 1, TELE-CONSENT: 1 }
+  consent_text_versions: { P-ACCOUNT: 3, P-CARE: 1, P-RECORD: 1, P-REMIND: 1, P-SHARE: 2, P-MEDNAMES: 1, P-ANALYTICS: 1, P-NEWS: 1, P-CAREGIVER: 1, D-VERIFY: 2, D-PROFILE: 1, D-ANALYTICS: 1, D-STAFF: 1, TELE-CONSENT: 1 }
 
 adapters:
   payments: fake-payments
@@ -118,4 +118,5 @@ features:
   sos: true
   family_profiles: false
   prescription_scan: false
+  caregivers: true
   reviews: true

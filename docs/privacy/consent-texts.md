@@ -44,6 +44,7 @@ Helper text under this group: *These three are needed for the app to work. You c
 |---|---|
 | `P-REMIND@2` | **Reminders from my prescriptions.** Create reminders from my prescriptions (medicines, injections, tests and follow-up visits) and send them to me in the app, with SMS as backup. I can switch off any reminder, or all of them. *Also offered when a prescription arrives, if it is off. Booking messages (confirmation, appointment reminders) are part of P-CARE.* |
 | `P-WHATSAPP@1` *(ON HOLD: do not show until the founder lifts the WhatsApp hold)* | **Reminders on WhatsApp.** Send my reminders and booking updates to my WhatsApp number too. Messages will not name any condition. I can stop them at any time by replying STOP or in Settings. *WhatsApp is run by Meta, which may process messages outside India.* |
+| `P-CAREGIVER@1` *(v1.1, only where the country pack turns the "caregivers" feature on; **[VALIDATE] lawyer**)* | **Let a person I trust see part of my care.** I agree that [Product Name] can show the person I invite, and only the things I tick (reminders, appointments, prescriptions, documents), to that person in their own app. They can **view only**: they cannot book, change, upload or sign anything for me. Reminders and appointments are ticked by default; prescriptions and documents are shown only if I add them. **I can remove a person or change what they see at any time, and it takes effect at once; if I withdraw this choice, everyone I invited loses access at once.** The invitation code works for 48 hours, and I am told when someone accepts it. The person must be in [consult country] when they accept, and what they see stays on servers in India. |
 | `P-MEDNAMES@1` | **Show medicine names in reminders.** Show the medicine name in my reminders and notifications. If this is off, reminders say "Time for your medicine" only. Others may see my lock screen. |
 | `P-ANALYTICS@1` | **Help improve the app.** Let [Product Name] see how I use the app (screens and buttons), linked to a random code, never my name, phone number or health information. |
 | `P-NEWS@1` | **Product news.** Send me occasional news about new features. No health advice, no offers from others. |
@@ -141,6 +142,7 @@ The waitlist form must not ask for any health information. Store: contact, time,
 | P-CARE | Needed | Off until ticked | Close account | K-DP-02, K-PAY-01 |
 | P-RECORD | Needed | Off until ticked | Close account | K-DP-02, K-DP-03 |
 | P-REMIND | **Optional** (was needed; changed 2026-11-15) | Off; offered at sign-up and when a prescription arrives | Settings, immediate; single reminders can be switched off | K-DP-09 |
+| P-CAREGIVER | Optional (v1.1, flag `caregivers`) | Off | Settings → Privacy, immediate; revokes every caregiver link | K-DP-02, E-FAM-02 |
 | P-SHARE | Per consultation | Asked each time | Settings → Privacy, immediate | K-DP-02 |
 | P-WHATSAPP | Optional | Off | STOP or Settings, immediate | K-MSG-02 |
 | P-MEDNAMES | Optional | Off | Settings, immediate | K-DP-09 |

@@ -60,7 +60,24 @@ resource "aws_sns_topic" "alerts" {
   kms_master_key_id = var.kms_key_arn
 }
 
+data "aws_caller_identity" "current" {}
+
 data "aws_iam_policy_document" "alerts" {
+  statement {
+    sid       = "AllowAlarmsAndEvents"
+    actions   = ["sns:Publish"]
+    resources = [aws_sns_topic.alerts.arn]
+    principals {
+      type        = "Service"
+      identifiers = ["cloudwatch.amazonaws.com", "events.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+  }
+
   statement {
     sid       = "DenyInsecureTransport"
     effect    = "Deny"
@@ -103,7 +120,7 @@ resource "aws_cloudwatch_metric_alarm" "http_5xx" {
 
   metric_query {
     id          = "rate"
-    expression  = "100 * (e5 + t5) / MAX([req, 1])"
+    expression  = "100 * (FILL(e5, 0) + FILL(t5, 0)) / MAX([FILL(req, 0), 1])"
     label       = "5xx percent"
     return_data = true
   }
