@@ -56,6 +56,19 @@ vet:
   script:
     - (cd backend && go vet ./...)
     - (cd scheduler-core && go vet ./...)
+    # The DAST and load targets are behind build tags; keep them compiling.
+    - (cd backend && go vet -tags dast ./internal/app/ && go vet -tags load ./internal/app/)
+
+# go.mod and go.sum must match the code (a dependency added by hand, or left after removal,
+# fails here; K-SEC-06).
+go-mod-tidy:
+  extends: .go-job
+  stage: lint
+  variables:
+    GOFLAGS: -mod=mod
+  script:
+    - (cd backend && go mod tidy && git diff --exit-code go.mod go.sum)
+    - (cd scheduler-core && go mod tidy && git diff --exit-code go.mod go.sum)
 
 golangci-lint:
   extends: .go-job
@@ -153,3 +166,28 @@ devimage:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - docker build -t "$DEV_IMAGE" -f tools/devimage/Dockerfile tools/devimage
     - docker push "$DEV_IMAGE"
+
+# Production images (S-094): one core image (api, worker, migrate) and one scheduler-core image,
+# non-root, from scratch. Scanned before push; a HIGH or CRITICAL finding fails the job (K-SEC-06).
+images:
+  stage: build
+  image: docker:27.5.1
+  services:
+    - name: docker:27.5.1-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  allow_failure: false
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker build -f deploy/images/core.Dockerfile -t "$CI_REGISTRY_IMAGE/core:$CI_COMMIT_SHORT_SHA" .
+    - docker build -f deploy/images/scheduler-core.Dockerfile -t "$CI_REGISTRY_IMAGE/scheduler-core:$CI_COMMIT_SHORT_SHA" .
+    - for img in core scheduler-core; do
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.65.0 image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed "$CI_REGISTRY_IMAGE/$img:$CI_COMMIT_SHORT_SHA";
+      done
+    - docker push "$CI_REGISTRY_IMAGE/core:$CI_COMMIT_SHORT_SHA"
+    - docker push "$CI_REGISTRY_IMAGE/scheduler-core:$CI_COMMIT_SHORT_SHA"

@@ -134,6 +134,108 @@ func (e AlertReason) Valid() bool {
 	}
 }
 
+// Defines values for FeedbackDiagnosticsNetworkType.
+const (
+	Cellular FeedbackDiagnosticsNetworkType = "cellular"
+	None     FeedbackDiagnosticsNetworkType = "none"
+	Unknown  FeedbackDiagnosticsNetworkType = "unknown"
+	Wifi     FeedbackDiagnosticsNetworkType = "wifi"
+)
+
+// Valid indicates whether the value is a known member of the FeedbackDiagnosticsNetworkType enum.
+func (e FeedbackDiagnosticsNetworkType) Valid() bool {
+	switch e {
+	case Cellular:
+		return true
+	case None:
+		return true
+	case Unknown:
+		return true
+	case Wifi:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FeedbackKind.
+const (
+	FeedbackKindBug      FeedbackKind = "bug"
+	FeedbackKindFeedback FeedbackKind = "feedback"
+)
+
+// Valid indicates whether the value is a known member of the FeedbackKind enum.
+func (e FeedbackKind) Valid() bool {
+	switch e {
+	case FeedbackKindBug:
+		return true
+	case FeedbackKindFeedback:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FeedbackPlatform.
+const (
+	Android FeedbackPlatform = "android"
+	Ios     FeedbackPlatform = "ios"
+	Web     FeedbackPlatform = "web"
+)
+
+// Valid indicates whether the value is a known member of the FeedbackPlatform enum.
+func (e FeedbackPlatform) Valid() bool {
+	switch e {
+	case Android:
+		return true
+	case Ios:
+		return true
+	case Web:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FeedbackStatus.
+const (
+	FeedbackStatusClosed  FeedbackStatus = "closed"
+	FeedbackStatusNew     FeedbackStatus = "new"
+	FeedbackStatusTriaged FeedbackStatus = "triaged"
+)
+
+// Valid indicates whether the value is a known member of the FeedbackStatus enum.
+func (e FeedbackStatus) Valid() bool {
+	switch e {
+	case FeedbackStatusClosed:
+		return true
+	case FeedbackStatusNew:
+		return true
+	case FeedbackStatusTriaged:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FeedbackStatusChangeStatus.
+const (
+	FeedbackStatusChangeStatusClosed  FeedbackStatusChangeStatus = "closed"
+	FeedbackStatusChangeStatusTriaged FeedbackStatusChangeStatus = "triaged"
+)
+
+// Valid indicates whether the value is a known member of the FeedbackStatusChangeStatus enum.
+func (e FeedbackStatusChangeStatus) Valid() bool {
+	switch e {
+	case FeedbackStatusChangeStatusClosed:
+		return true
+	case FeedbackStatusChangeStatusTriaged:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GrievanceKind.
 const (
 	GrievanceKindChildAccount      GrievanceKind = "child_account"
@@ -289,6 +391,99 @@ type AlertList struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
+// Feedback defines model for Feedback.
+type Feedback struct {
+	AppVersion *string `json:"appVersion,omitempty"`
+
+	// Diagnostics Codes only, sent only when the user ticks "attach diagnostics". No free text, identifiers, logs or screenshots.
+	Diagnostics *FeedbackDiagnostics `json:"diagnostics,omitempty"`
+	FeedbackId  openapi_types.UUID   `json:"feedbackId"`
+	Kind        FeedbackKind         `json:"kind"`
+
+	// Message Your own message; returned to its author only
+	Message    string            `json:"message"`
+	Platform   *FeedbackPlatform `json:"platform,omitempty"`
+	ReceivedAt time.Time         `json:"receivedAt"`
+	Reference  string            `json:"reference"`
+	Screen     *string           `json:"screen,omitempty"`
+	Status     FeedbackStatus    `json:"status"`
+}
+
+// FeedbackCreate defines model for FeedbackCreate.
+type FeedbackCreate struct {
+	AppVersion *string `json:"appVersion,omitempty"`
+
+	// Diagnostics Codes only, sent only when the user ticks "attach diagnostics". No free text, identifiers, logs or screenshots.
+	Diagnostics *FeedbackDiagnostics `json:"diagnostics,omitempty"`
+	Kind        FeedbackKind         `json:"kind"`
+
+	// Message Your own words. No health details, contact details, links or identity numbers.
+	Message  string            `json:"message"`
+	Platform *FeedbackPlatform `json:"platform,omitempty"`
+	Screen   *string           `json:"screen,omitempty"`
+}
+
+// FeedbackDiagnostics Codes only, sent only when the user ticks "attach diagnostics". No free text, identifiers, logs or screenshots.
+type FeedbackDiagnostics struct {
+	LastErrorCode *string                         `json:"lastErrorCode,omitempty"`
+	NetworkType   *FeedbackDiagnosticsNetworkType `json:"networkType,omitempty"`
+	OsVersion     *string                         `json:"osVersion,omitempty"`
+}
+
+// FeedbackDiagnosticsNetworkType defines model for FeedbackDiagnostics.NetworkType.
+type FeedbackDiagnosticsNetworkType string
+
+// FeedbackKind defines model for FeedbackKind.
+type FeedbackKind string
+
+// FeedbackList defines model for FeedbackList.
+type FeedbackList struct {
+	Items      []Feedback `json:"items"`
+	NextCursor *string    `json:"nextCursor,omitempty"`
+}
+
+// FeedbackPlatform defines model for FeedbackPlatform.
+type FeedbackPlatform string
+
+// FeedbackReceipt defines model for FeedbackReceipt.
+type FeedbackReceipt struct {
+	FeedbackId openapi_types.UUID `json:"feedbackId"`
+	ReceivedAt time.Time          `json:"receivedAt"`
+	Reference  string             `json:"reference"`
+}
+
+// FeedbackStatus defines model for FeedbackStatus.
+type FeedbackStatus string
+
+// FeedbackStatusChange defines model for FeedbackStatusChange.
+type FeedbackStatusChange struct {
+	Status FeedbackStatusChangeStatus `json:"status"`
+}
+
+// FeedbackStatusChangeStatus defines model for FeedbackStatusChange.Status.
+type FeedbackStatusChangeStatus string
+
+// FeedbackTriage A feedback item for triage. It never carries the message.
+type FeedbackTriage struct {
+	AppVersion *string `json:"appVersion,omitempty"`
+
+	// Diagnostics Codes only, sent only when the user ticks "attach diagnostics". No free text, identifiers, logs or screenshots.
+	Diagnostics *FeedbackDiagnostics `json:"diagnostics,omitempty"`
+	FeedbackId  openapi_types.UUID   `json:"feedbackId"`
+	Kind        FeedbackKind         `json:"kind"`
+	Platform    *FeedbackPlatform    `json:"platform,omitempty"`
+	ReceivedAt  time.Time            `json:"receivedAt"`
+	Reference   string               `json:"reference"`
+	Screen      *string              `json:"screen,omitempty"`
+	Status      FeedbackStatus       `json:"status"`
+}
+
+// FeedbackTriageList defines model for FeedbackTriageList.
+type FeedbackTriageList struct {
+	Items      []FeedbackTriage `json:"items"`
+	NextCursor *string          `json:"nextCursor,omitempty"`
+}
+
 // Grievance defines model for Grievance.
 type Grievance struct {
 	AckDueAt       time.Time          `json:"ackDueAt"`
@@ -327,8 +522,12 @@ type GrievanceResolve struct {
 
 // Problem defines model for Problem.
 type Problem struct {
-	Code     string  `json:"code"`
-	Detail   *string `json:"detail,omitempty"`
+	Code   string  `json:"code"`
+	Detail *string `json:"detail,omitempty"`
+	Errors *[]struct {
+		Code  string `json:"code"`
+		Field string `json:"field"`
+	} `json:"errors,omitempty"`
 	Instance *string `json:"instance,omitempty"`
 	Status   int     `json:"status"`
 	Title    string  `json:"title"`
@@ -338,6 +537,9 @@ type Problem struct {
 
 // Cursor defines model for Cursor.
 type Cursor = string
+
+// FeedbackId defines model for FeedbackId.
+type FeedbackId = openapi_types.UUID
 
 // GrievanceId defines model for GrievanceId.
 type GrievanceId = openapi_types.UUID
@@ -382,6 +584,17 @@ type BreakGlassAccessParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// ListFeedbackForTriageParams defines parameters for ListFeedbackForTriage.
+type ListFeedbackForTriageParams struct {
+	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// SetFeedbackStatusParams defines parameters for SetFeedbackStatus.
+type SetFeedbackStatusParams struct {
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // ListGrievanceAlertsParams defines parameters for ListGrievanceAlerts.
 type ListGrievanceAlertsParams struct {
 	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
@@ -401,6 +614,17 @@ type AcknowledgeGrievanceParams struct {
 
 // ResolveGrievanceParams defines parameters for ResolveGrievance.
 type ResolveGrievanceParams struct {
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ListMyFeedbackParams defines parameters for ListMyFeedback.
+type ListMyFeedbackParams struct {
+	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// CreateFeedbackParams defines parameters for CreateFeedback.
+type CreateFeedbackParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -427,8 +651,14 @@ type LookupAccountJSONRequestBody = AccountLookupRequest
 // BreakGlassAccessJSONRequestBody defines body for BreakGlassAccess for application/json ContentType.
 type BreakGlassAccessJSONRequestBody = AccessRequestCreate
 
+// SetFeedbackStatusJSONRequestBody defines body for SetFeedbackStatus for application/json ContentType.
+type SetFeedbackStatusJSONRequestBody = FeedbackStatusChange
+
 // ResolveGrievanceJSONRequestBody defines body for ResolveGrievance for application/json ContentType.
 type ResolveGrievanceJSONRequestBody = GrievanceResolve
+
+// CreateFeedbackJSONRequestBody defines body for CreateFeedback for application/json ContentType.
+type CreateFeedbackJSONRequestBody = FeedbackCreate
 
 // CreateGrievanceJSONRequestBody defines body for CreateGrievance for application/json ContentType.
 type CreateGrievanceJSONRequestBody = GrievanceCreate
@@ -453,6 +683,12 @@ type ServerInterface interface {
 	// BreakGlassAccess Immediate access in a live security incident; alerts, justification due in 24 hours
 	// (POST /admin/v1/break-glass)
 	BreakGlassAccess(w http.ResponseWriter, r *http.Request, params BreakGlassAccessParams)
+	// ListFeedbackForTriage Feedback for triage, newest first, without the message
+	// (GET /admin/v1/feedback)
+	ListFeedbackForTriage(w http.ResponseWriter, r *http.Request, params ListFeedbackForTriageParams)
+	// SetFeedbackStatus Mark feedback triaged or closed
+	// (POST /admin/v1/feedback/{feedbackId}/status)
+	SetFeedbackStatus(w http.ResponseWriter, r *http.Request, feedbackId FeedbackId, params SetFeedbackStatusParams)
 	// ListGrievanceAlerts Timer alerts (10-day and 80% pre-alerts, overdue acknowledgements, breaches)
 	// (GET /admin/v1/grievance-alerts)
 	ListGrievanceAlerts(w http.ResponseWriter, r *http.Request, params ListGrievanceAlertsParams)
@@ -465,6 +701,12 @@ type ServerInterface interface {
 	// ResolveGrievance Resolve a grievance with an outcome code
 	// (POST /admin/v1/grievances/{grievanceId}/resolve)
 	ResolveGrievance(w http.ResponseWriter, r *http.Request, grievanceId GrievanceId, params ResolveGrievanceParams)
+	// ListMyFeedback My feedback and bug reports, newest first (with my own message)
+	// (GET /v1/me/feedback)
+	ListMyFeedback(w http.ResponseWriter, r *http.Request, params ListMyFeedbackParams)
+	// CreateFeedback Send feedback or a bug report (S-189); no health data is attached by default
+	// (POST /v1/me/feedback)
+	CreateFeedback(w http.ResponseWriter, r *http.Request, params CreateFeedbackParams)
 	// ListMyGrievances My complaints and their status
 	// (GET /v1/me/grievances)
 	ListMyGrievances(w http.ResponseWriter, r *http.Request, params ListMyGrievancesParams)
@@ -513,6 +755,18 @@ func (_ Unimplemented) BreakGlassAccess(w http.ResponseWriter, r *http.Request, 
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ListFeedbackForTriage Feedback for triage, newest first, without the message
+// (GET /admin/v1/feedback)
+func (_ Unimplemented) ListFeedbackForTriage(w http.ResponseWriter, r *http.Request, params ListFeedbackForTriageParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SetFeedbackStatus Mark feedback triaged or closed
+// (POST /admin/v1/feedback/{feedbackId}/status)
+func (_ Unimplemented) SetFeedbackStatus(w http.ResponseWriter, r *http.Request, feedbackId FeedbackId, params SetFeedbackStatusParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ListGrievanceAlerts Timer alerts (10-day and 80% pre-alerts, overdue acknowledgements, breaches)
 // (GET /admin/v1/grievance-alerts)
 func (_ Unimplemented) ListGrievanceAlerts(w http.ResponseWriter, r *http.Request, params ListGrievanceAlertsParams) {
@@ -534,6 +788,18 @@ func (_ Unimplemented) AcknowledgeGrievance(w http.ResponseWriter, r *http.Reque
 // ResolveGrievance Resolve a grievance with an outcome code
 // (POST /admin/v1/grievances/{grievanceId}/resolve)
 func (_ Unimplemented) ResolveGrievance(w http.ResponseWriter, r *http.Request, grievanceId GrievanceId, params ResolveGrievanceParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListMyFeedback My feedback and bug reports, newest first (with my own message)
+// (GET /v1/me/feedback)
+func (_ Unimplemented) ListMyFeedback(w http.ResponseWriter, r *http.Request, params ListMyFeedbackParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateFeedback Send feedback or a bug report (S-189); no health data is attached by default
+// (POST /v1/me/feedback)
+func (_ Unimplemented) CreateFeedback(w http.ResponseWriter, r *http.Request, params CreateFeedbackParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -836,6 +1102,102 @@ func (siw *ServerInterfaceWrapper) BreakGlassAccess(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// ListFeedbackForTriage operation middleware
+func (siw *ServerInterfaceWrapper) ListFeedbackForTriage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListFeedbackForTriageParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListFeedbackForTriage(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetFeedbackStatus operation middleware
+func (siw *ServerInterfaceWrapper) SetFeedbackStatus(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "feedbackId" -------------
+	var feedbackId FeedbackId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "feedbackId", chi.URLParam(r, "feedbackId"), &feedbackId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "feedbackId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetFeedbackStatusParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetFeedbackStatus(w, r, feedbackId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListGrievanceAlerts operation middleware
 func (siw *ServerInterfaceWrapper) ListGrievanceAlerts(w http.ResponseWriter, r *http.Request) {
 
@@ -1019,6 +1381,93 @@ func (siw *ServerInterfaceWrapper) ResolveGrievance(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ResolveGrievance(w, r, grievanceId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMyFeedback operation middleware
+func (siw *ServerInterfaceWrapper) ListMyFeedback(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMyFeedbackParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMyFeedback(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateFeedback operation middleware
+func (siw *ServerInterfaceWrapper) CreateFeedback(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateFeedbackParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateFeedback(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1263,6 +1712,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/v1/grievance-alerts", wrapper.ListGrievanceAlerts)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/me/feedback", wrapper.ListMyFeedback)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/me/feedback", wrapper.CreateFeedback)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/v1/feedback", wrapper.ListFeedbackForTriage)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/v1/feedback/{feedbackId}/status", wrapper.SetFeedbackStatus)
 	})
 
 	return r
@@ -1751,6 +2212,148 @@ func (response BreakGlassAccess403ApplicationProblemPlusJSONResponse) VisitBreak
 	return err
 }
 
+type ListFeedbackForTriageRequestObject struct {
+	Params ListFeedbackForTriageParams
+}
+
+type ListFeedbackForTriageResponseObject interface {
+	VisitListFeedbackForTriageResponse(w http.ResponseWriter) error
+}
+
+type ListFeedbackForTriage200JSONResponse FeedbackTriageList
+
+func (response ListFeedbackForTriage200JSONResponse) VisitListFeedbackForTriageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFeedbackForTriage400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListFeedbackForTriage400ApplicationProblemPlusJSONResponse) VisitListFeedbackForTriageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFeedbackForTriage401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListFeedbackForTriage401ApplicationProblemPlusJSONResponse) VisitListFeedbackForTriageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFeedbackForTriage403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListFeedbackForTriage403ApplicationProblemPlusJSONResponse) VisitListFeedbackForTriageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFeedbackStatusRequestObject struct {
+	FeedbackId FeedbackId `json:"feedbackId"`
+	Params     SetFeedbackStatusParams
+	Body       *SetFeedbackStatusJSONRequestBody
+}
+
+type SetFeedbackStatusResponseObject interface {
+	VisitSetFeedbackStatusResponse(w http.ResponseWriter) error
+}
+
+type SetFeedbackStatus204Response struct {
+}
+
+func (response SetFeedbackStatus204Response) VisitSetFeedbackStatusResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type SetFeedbackStatus400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response SetFeedbackStatus400ApplicationProblemPlusJSONResponse) VisitSetFeedbackStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFeedbackStatus401ApplicationProblemPlusJSONResponse Problem
+
+func (response SetFeedbackStatus401ApplicationProblemPlusJSONResponse) VisitSetFeedbackStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFeedbackStatus403ApplicationProblemPlusJSONResponse Problem
+
+func (response SetFeedbackStatus403ApplicationProblemPlusJSONResponse) VisitSetFeedbackStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFeedbackStatus404ApplicationProblemPlusJSONResponse Problem
+
+func (response SetFeedbackStatus404ApplicationProblemPlusJSONResponse) VisitSetFeedbackStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListGrievanceAlertsRequestObject struct {
 	Params ListGrievanceAlertsParams
 }
@@ -1992,6 +2595,167 @@ func (response ResolveGrievance404ApplicationProblemPlusJSONResponse) VisitResol
 	return err
 }
 
+type ListMyFeedbackRequestObject struct {
+	Params ListMyFeedbackParams
+}
+
+type ListMyFeedbackResponseObject interface {
+	VisitListMyFeedbackResponse(w http.ResponseWriter) error
+}
+
+type ListMyFeedback200JSONResponse FeedbackList
+
+func (response ListMyFeedback200JSONResponse) VisitListMyFeedbackResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyFeedback400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListMyFeedback400ApplicationProblemPlusJSONResponse) VisitListMyFeedbackResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyFeedback401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListMyFeedback401ApplicationProblemPlusJSONResponse) VisitListMyFeedbackResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyFeedback403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListMyFeedback403ApplicationProblemPlusJSONResponse) VisitListMyFeedbackResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateFeedbackRequestObject struct {
+	Params CreateFeedbackParams
+	Body   *CreateFeedbackJSONRequestBody
+}
+
+type CreateFeedbackResponseObject interface {
+	VisitCreateFeedbackResponse(w http.ResponseWriter) error
+}
+
+type CreateFeedback201JSONResponse FeedbackReceipt
+
+func (response CreateFeedback201JSONResponse) VisitCreateFeedbackResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateFeedback400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateFeedback400ApplicationProblemPlusJSONResponse) VisitCreateFeedbackResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateFeedback401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateFeedback401ApplicationProblemPlusJSONResponse) VisitCreateFeedbackResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateFeedback403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateFeedback403ApplicationProblemPlusJSONResponse) VisitCreateFeedbackResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateFeedback422ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateFeedback422ApplicationProblemPlusJSONResponse) VisitCreateFeedbackResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateFeedback429ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateFeedback429ApplicationProblemPlusJSONResponse) VisitCreateFeedbackResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListMyGrievancesRequestObject struct {
 	Params ListMyGrievancesParams
 }
@@ -2131,6 +2895,12 @@ type StrictServerInterface interface {
 	// BreakGlassAccess Immediate access in a live security incident; alerts, justification due in 24 hours
 	// (POST /admin/v1/break-glass)
 	BreakGlassAccess(ctx context.Context, request BreakGlassAccessRequestObject) (BreakGlassAccessResponseObject, error)
+	// ListFeedbackForTriage Feedback for triage, newest first, without the message
+	// (GET /admin/v1/feedback)
+	ListFeedbackForTriage(ctx context.Context, request ListFeedbackForTriageRequestObject) (ListFeedbackForTriageResponseObject, error)
+	// SetFeedbackStatus Mark feedback triaged or closed
+	// (POST /admin/v1/feedback/{feedbackId}/status)
+	SetFeedbackStatus(ctx context.Context, request SetFeedbackStatusRequestObject) (SetFeedbackStatusResponseObject, error)
 	// ListGrievanceAlerts Timer alerts (10-day and 80% pre-alerts, overdue acknowledgements, breaches)
 	// (GET /admin/v1/grievance-alerts)
 	ListGrievanceAlerts(ctx context.Context, request ListGrievanceAlertsRequestObject) (ListGrievanceAlertsResponseObject, error)
@@ -2143,6 +2913,12 @@ type StrictServerInterface interface {
 	// ResolveGrievance Resolve a grievance with an outcome code
 	// (POST /admin/v1/grievances/{grievanceId}/resolve)
 	ResolveGrievance(ctx context.Context, request ResolveGrievanceRequestObject) (ResolveGrievanceResponseObject, error)
+	// ListMyFeedback My feedback and bug reports, newest first (with my own message)
+	// (GET /v1/me/feedback)
+	ListMyFeedback(ctx context.Context, request ListMyFeedbackRequestObject) (ListMyFeedbackResponseObject, error)
+	// CreateFeedback Send feedback or a bug report (S-189); no health data is attached by default
+	// (POST /v1/me/feedback)
+	CreateFeedback(ctx context.Context, request CreateFeedbackRequestObject) (CreateFeedbackResponseObject, error)
 	// ListMyGrievances My complaints and their status
 	// (GET /v1/me/grievances)
 	ListMyGrievances(ctx context.Context, request ListMyGrievancesRequestObject) (ListMyGrievancesResponseObject, error)
@@ -2377,6 +3153,66 @@ func (sh *strictHandler) BreakGlassAccess(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// ListFeedbackForTriage operation middleware
+func (sh *strictHandler) ListFeedbackForTriage(w http.ResponseWriter, r *http.Request, params ListFeedbackForTriageParams) {
+	var request ListFeedbackForTriageRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListFeedbackForTriage(ctx, request.(ListFeedbackForTriageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListFeedbackForTriage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListFeedbackForTriageResponseObject); ok {
+		if err := validResponse.VisitListFeedbackForTriageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetFeedbackStatus operation middleware
+func (sh *strictHandler) SetFeedbackStatus(w http.ResponseWriter, r *http.Request, feedbackId FeedbackId, params SetFeedbackStatusParams) {
+	var request SetFeedbackStatusRequestObject
+
+	request.FeedbackId = feedbackId
+	request.Params = params
+
+	var body SetFeedbackStatusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetFeedbackStatus(ctx, request.(SetFeedbackStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetFeedbackStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetFeedbackStatusResponseObject); ok {
+		if err := validResponse.VisitSetFeedbackStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListGrievanceAlerts operation middleware
 func (sh *strictHandler) ListGrievanceAlerts(w http.ResponseWriter, r *http.Request, params ListGrievanceAlertsParams) {
 	var request ListGrievanceAlertsRequestObject
@@ -2490,6 +3326,65 @@ func (sh *strictHandler) ResolveGrievance(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// ListMyFeedback operation middleware
+func (sh *strictHandler) ListMyFeedback(w http.ResponseWriter, r *http.Request, params ListMyFeedbackParams) {
+	var request ListMyFeedbackRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMyFeedback(ctx, request.(ListMyFeedbackRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMyFeedback")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMyFeedbackResponseObject); ok {
+		if err := validResponse.VisitListMyFeedbackResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateFeedback operation middleware
+func (sh *strictHandler) CreateFeedback(w http.ResponseWriter, r *http.Request, params CreateFeedbackParams) {
+	var request CreateFeedbackRequestObject
+
+	request.Params = params
+
+	var body CreateFeedbackJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateFeedback(ctx, request.(CreateFeedbackRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateFeedback")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateFeedbackResponseObject); ok {
+		if err := validResponse.VisitCreateFeedbackResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListMyGrievances operation middleware
 func (sh *strictHandler) ListMyGrievances(w http.ResponseWriter, r *http.Request, params ListMyGrievancesParams) {
 	var request ListMyGrievancesRequestObject
@@ -2554,51 +3449,70 @@ func (sh *strictHandler) CreateGrievance(w http.ResponseWriter, r *http.Request,
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"//8A",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

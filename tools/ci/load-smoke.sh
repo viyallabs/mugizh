@@ -17,7 +17,13 @@ NAME=mugizh-load-target
 
 docker network inspect "$NET" >/dev/null 2>&1 || docker network create "$NET" >/dev/null
 docker rm -f "$NAME" >/dev/null 2>&1 || true
-trap 'docker rm -f "$NAME" >/dev/null 2>&1 || true' EXIT
+# Stop the target cleanly so the test removes its database container (Ryuk is disabled); force only as a last resort.
+cleanup() {
+  docker exec "$NAME" touch /tmp/stop >/dev/null 2>&1 || true
+  for _ in $(seq 1 30); do docker ps -q -f name="$NAME" | grep -q . || break; sleep 2; done
+  docker rm -f "$NAME" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
 
 docker run -d --name "$NAME" --network "$NET" \
   -v "${ROOT}:/src" -v mugizh-gomod:/go/pkg/mod -v mugizh-gobuild:/root/.cache/go-build \

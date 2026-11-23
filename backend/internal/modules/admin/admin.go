@@ -58,16 +58,20 @@ type Config struct {
 	ApprovalWindow      time.Duration // how long a request waits for approval
 	JustificationWithin time.Duration // break-glass justification (24 h)
 
-	AckWithin            time.Duration // acknowledge (24 h)
-	ResolveWithin        time.Duration // complaints (7 days)
-	ContentTakedown      time.Duration // unlawful content (36 h)
-	OrderCompliance      time.Duration // government or court order (3 h)
-	IntimateImage        time.Duration // intimate or morphed images (2 h)
-	LawfulRequest        time.Duration // lawful requests (72 h)
-	MedicalRecordCopy    time.Duration // copy of medical records (72 h)
-	DataRightsResponse   time.Duration // data rights (15 days)
-	DataRightsAlertAt    time.Duration // alert for data rights (10 days)
-	AlertFraction        float64       // alert for other items at this share of the window (0.8)
+	AckWithin          time.Duration // acknowledge (24 h)
+	ResolveWithin      time.Duration // complaints (7 days)
+	ContentTakedown    time.Duration // unlawful content (36 h)
+	OrderCompliance    time.Duration // government or court order (3 h)
+	IntimateImage      time.Duration // intimate or morphed images (2 h)
+	LawfulRequest      time.Duration // lawful requests (72 h)
+	MedicalRecordCopy  time.Duration // copy of medical records (72 h)
+	DataRightsResponse time.Duration // data rights (15 days)
+	DataRightsAlertAt  time.Duration // alert for data rights (10 days)
+	AlertFraction      float64       // alert for other items at this share of the window (0.8)
+	// FeedbackPerDay caps one person's feedback items in any 24 hours (S-189). Default 10.
+	FeedbackPerDay int
+	// FeedbackRetention is how long feedback is kept from receipt. Default 1 year [CONFIRM].
+	FeedbackRetention    time.Duration
 	ProhibitedValidators []string
 }
 

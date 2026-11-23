@@ -265,12 +265,111 @@ paths:
               schema: { $ref: '#/components/schemas/AlertList' }
         '401': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/Problem' }
+  /v1/me/feedback:
+    get:
+      operationId: listMyFeedback
+      tags: [admin]
+      summary: My feedback and bug reports, newest first (with my own message)
+      x-roles: [authenticated]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Feedback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FeedbackList' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createFeedback
+      tags: [admin]
+      summary: Send feedback or a bug report (S-189); no health data is attached by default
+      description: |
+        The message is sealed with the sender's own key. Diagnostics (an operating system version, a
+        network type and the last error code) are sent only when the user ticks "attach diagnostics".
+        A message that holds an identity number, a phone number, an e-mail address, a link or markup,
+        or control characters, or is too long: 422 with field codes, so the person can edit it.
+        At most 10 items per person per day (429).
+      x-roles: [authenticated]
+      x-ownership: self
+      x-side-effect: none
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FeedbackCreate' }
+      responses:
+        '201':
+          description: Received
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FeedbackReceipt' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+  /admin/v1/feedback:
+    get:
+      operationId: listFeedbackForTriage
+      tags: [admin]
+      summary: Feedback for triage, newest first, without the message
+      description: |
+        Support sees the kind, screen, app version, platform, diagnostics codes, status and time, never
+        the message. Whether staff may read user-written text needs a founder decision (K-SEC-08,
+        blockers F8), so reading it is not built.
+      x-roles: [support]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Feedback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FeedbackTriageList' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /admin/v1/feedback/{feedbackId}/status:
+    post:
+      operationId: setFeedbackStatus
+      tags: [admin]
+      summary: Mark feedback triaged or closed
+      x-roles: [support]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/FeedbackId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FeedbackStatusChange' }
+      responses:
+        '204': { description: Updated }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
 components:
   parameters:
     IdempotencyKey:
       name: Idempotency-Key
       in: header
       required: false
+      schema: { type: string, format: uuid }
+    FeedbackId:
+      name: feedbackId
+      in: path
+      required: true
       schema: { type: string, format: uuid }
     RequestId:
       name: requestId
@@ -310,6 +409,99 @@ components:
         detail: { type: string }
         instance: { type: string }
         traceId: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, code]
+            properties:
+              field: { type: string }
+              code: { type: string }
+    FeedbackKind:
+      type: string
+      enum: [feedback, bug]
+    FeedbackPlatform:
+      type: string
+      enum: [android, ios, web]
+    FeedbackStatus:
+      type: string
+      enum: [new, triaged, closed]
+    FeedbackDiagnostics:
+      type: object
+      additionalProperties: false
+      description: 'Codes only, sent only when the user ticks "attach diagnostics". No free text, identifiers, logs or screenshots.'
+      properties:
+        osVersion: { type: string, pattern: '^[0-9A-Za-z.+\-]{1,20}$' }
+        networkType: { type: string, enum: [wifi, cellular, none, unknown] }
+        lastErrorCode: { type: string, pattern: '^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$', maxLength: 60 }
+    FeedbackCreate:
+      type: object
+      additionalProperties: false
+      required: [kind, message]
+      properties:
+        kind: { $ref: '#/components/schemas/FeedbackKind' }
+        message: { type: string, minLength: 1, maxLength: 2000, description: 'Your own words. No health details, contact details, links or identity numbers.' }
+        screen: { type: string, pattern: '^[a-z][a-z0-9_.]{0,60}$' }
+        appVersion: { type: string, pattern: '^[0-9A-Za-z.+\-]{1,40}$' }
+        platform: { $ref: '#/components/schemas/FeedbackPlatform' }
+        diagnostics: { $ref: '#/components/schemas/FeedbackDiagnostics' }
+    FeedbackReceipt:
+      type: object
+      required: [feedbackId, reference, receivedAt]
+      properties:
+        feedbackId: { type: string, format: uuid }
+        reference: { type: string }
+        receivedAt: { type: string, format: date-time }
+    Feedback:
+      type: object
+      required: [feedbackId, reference, kind, message, status, receivedAt]
+      properties:
+        feedbackId: { type: string, format: uuid }
+        reference: { type: string }
+        kind: { $ref: '#/components/schemas/FeedbackKind' }
+        message: { type: string, description: Your own message; returned to its author only }
+        screen: { type: string }
+        appVersion: { type: string }
+        platform: { $ref: '#/components/schemas/FeedbackPlatform' }
+        diagnostics: { $ref: '#/components/schemas/FeedbackDiagnostics' }
+        status: { $ref: '#/components/schemas/FeedbackStatus' }
+        receivedAt: { type: string, format: date-time }
+    FeedbackList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Feedback' }
+        nextCursor: { type: string }
+    FeedbackTriage:
+      type: object
+      required: [feedbackId, reference, kind, status, receivedAt]
+      description: A feedback item for triage. It never carries the message.
+      properties:
+        feedbackId: { type: string, format: uuid }
+        reference: { type: string }
+        kind: { $ref: '#/components/schemas/FeedbackKind' }
+        screen: { type: string }
+        appVersion: { type: string }
+        platform: { $ref: '#/components/schemas/FeedbackPlatform' }
+        diagnostics: { $ref: '#/components/schemas/FeedbackDiagnostics' }
+        status: { $ref: '#/components/schemas/FeedbackStatus' }
+        receivedAt: { type: string, format: date-time }
+    FeedbackTriageList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/FeedbackTriage' }
+        nextCursor: { type: string }
+    FeedbackStatusChange:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [triaged, closed] }
     GrievanceCreate:
       type: object
       additionalProperties: false

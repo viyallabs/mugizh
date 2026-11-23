@@ -21,7 +21,12 @@ TARGET="http://${TARGET_NAME}:18081"
 
 docker network inspect "$NET" >/dev/null 2>&1 || docker network create "$NET" >/dev/null
 docker rm -f "$TARGET_NAME" >/dev/null 2>&1 || true
-cleanup() { docker rm -f "$TARGET_NAME" >/dev/null 2>&1 || true; }
+# Stop the target cleanly so the test removes its database container (Ryuk is disabled); force only as a last resort.
+cleanup() {
+  docker exec "$TARGET_NAME" touch /tmp/stop >/dev/null 2>&1 || true
+  for _ in $(seq 1 30); do docker ps -q -f name="$TARGET_NAME" | grep -q . || break; sleep 2; done
+  docker rm -f "$TARGET_NAME" >/dev/null 2>&1 || true
+}
 trap cleanup EXIT
 
 echo "starting the DAST target"

@@ -126,3 +126,4 @@ features:
   sos: false                        # v1.1
   family_profiles: false            # v1.1; child profiles also need CH-11 protocol
   prescription_scan: false          # v1.1
+  reviews: false                    # v1.1; F15 reviews and ratings (S-209, S-214); on only after S-213 moderation and the review policy are approved [CONFIRM]

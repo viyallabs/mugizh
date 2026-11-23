@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS processed_event;
+DROP TABLE IF EXISTS event_outbox;
+DROP TABLE IF EXISTS doctor_rating;
+DROP TABLE IF EXISTS review;
+DROP TABLE IF EXISTS visit;

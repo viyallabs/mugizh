@@ -1,0 +1,205 @@
+openapi: 3.1.0
+info:
+  title: Core API — reviews (patient ratings of doctors)
+  version: 1.0.0
+  description: |
+    Patient reviews of a doctor after a completed visit (S-209, backend part) and the public
+    rating (S-214). Rules built in (docs/legal/review-policy.md REV-1.0-draft, CD-05, CD-08):
+    only a patient with a completed visit can review, once per visit, within the review window
+    (E-REV-01, TC-51); another patient's or an unknown visit answers 404 (K-SEC-04). A star
+    rating counts in the doctor's rating at once; the optional text is sealed with the patient's
+    key, checked automatically, held as pending_moderation and never published by this API: only
+    its author gets it back (K-DP-03). The public rating is a Bayesian average
+    (C x m + sum of ratings) / (C + n) with no input from payment or anything commercial (CD-05);
+    the number of reviews is always returned. The whole API is behind the country pack feature
+    flag "reviews": when it is off these routes do not exist (404).
+tags:
+  - name: reviews
+    description: Reviews and doctor ratings
+paths:
+  /v1/me/appointments/{appointmentId}/review:
+    post:
+      operationId: createReview
+      tags: [reviews]
+      summary: Rate the doctor of one of my completed appointments
+      description: |
+        The appointment must be one of mine and completed, within the review window, and not
+        reviewed yet. Unknown or someone else's appointment: 404. Not completed or outside the
+        window: 409 review.not_eligible. Already reviewed: 409 review.already_reviewed. Text that
+        holds a link, markup, a contact detail, an identity number or control characters, or is too
+        long: 422 with field codes, so the patient can edit it. The rating is never forced
+        (E-REV-03): reviewing is always optional.
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateReviewRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Review' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /v1/me/reviews:
+    get:
+      operationId: listMyReviews
+      tags: [reviews]
+      summary: My reviews, newest first (with my own text and its moderation state)
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Reviews
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReviewList' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /v1/me/reviews/{reviewId}:
+    delete:
+      operationId: withdrawReview
+      tags: [reviews]
+      summary: Withdraw one of my reviews
+      description: |
+        The review and its text are deleted and the doctor's rating is recalculated without it.
+        Someone else's or an unknown review is 404.
+      x-roles: [patient]
+      x-ownership: self
+      parameters:
+        - $ref: '#/components/parameters/ReviewId'
+      responses:
+        '204': { description: Withdrawn }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /v1/doctors/{doctorId}/rating:
+    get:
+      operationId: getDoctorRating
+      tags: [reviews]
+      summary: The public rating of a Verified doctor (Bayesian average, count always shown)
+      description: |
+        rating is on the 1 to 5 scale, rounded to one decimal, and null when the doctor has no
+        reviews. A doctor who is not Verified, or unknown, is 404 (K-CS-01). Review text is never
+        part of this answer.
+      x-roles: [public]
+      x-ownership: none
+      parameters:
+        - $ref: '#/components/parameters/DoctorId'
+      responses:
+        '200':
+          description: The rating
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DoctorRating' }
+        '404': { $ref: '#/components/responses/Problem' }
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, format: uuid }
+    AppointmentId:
+      name: appointmentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ReviewId:
+      name: reviewId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    DoctorId:
+      name: doctorId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string, maxLength: 200 }
+  responses:
+    Problem:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string }
+        detail: { type: string }
+        instance: { type: string }
+        traceId: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, code]
+            properties:
+              field: { type: string }
+              code: { type: string }
+    CreateReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [rating]
+      properties:
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        text: { type: string, maxLength: 1000, description: 'Optional. Your own experience only: no health details, contact details, links or other people''s names. Held for moderation and never shown to anyone but you until it is published.' }
+    TextState:
+      type: string
+      enum: [none, pending_moderation]
+    Review:
+      type: object
+      required: [reviewId, appointmentId, doctorId, rating, textState, createdAt]
+      properties:
+        reviewId: { type: string, format: uuid }
+        appointmentId: { type: string, format: uuid }
+        doctorId: { type: string, format: uuid }
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        text: { type: string, description: Your own text; returned to its author only }
+        textState: { $ref: '#/components/schemas/TextState' }
+        createdAt: { type: string, format: date-time }
+    ReviewList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Review' }
+        nextCursor: { type: string }
+    DoctorRating:
+      type: object
+      required: [count, rating]
+      properties:
+        count: { type: integer, minimum: 0, description: The number of reviews; always returned }
+        rating:
+          type: [number, 'null']
+          format: double
+          description: Bayesian average on the 1 to 5 scale, one decimal; null when count is 0

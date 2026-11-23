@@ -105,7 +105,7 @@ func newJourneyIn(t *testing.T, start time.Time, pack string) *journey {
 	}
 	h := app.NewRouter(app.RouterConfig{Log: log, Crypto: c.Crypto, Auth: c.Identity, Idempotency: c.Idem, IPPerMinute: 1_000_000, UserPerMinute: 1_000_000, Now: j.clock,
 		Mount: app.Mounts(app.Modules{Identity: c.Identity, Records: c.Records, Rights: c.Rights, Verification: c.Verification, Directory: c.Directory,
-			Booking: c.Booking, Payments: c.Payments, Notify: c.Notify, Admin: c.Admin, Rx: c.Rx, Consult: c.Consult, Sharing: c.Sharing, History: c.History},
+			Booking: c.Booking, Payments: c.Payments, Notify: c.Notify, Admin: c.Admin, Rx: c.Rx, Consult: c.Consult, Reviews: c.ReviewsRoutes(), Sharing: c.Sharing, History: c.History},
 			pol, log, j.clock)})
 	j.srv = httptest.NewUnstartedServer(h)
 	if addr := os.Getenv("MUGIZH_DAST_ADDR"); addr != "" { // S-179: the DAST target (dast_test.go) listens where ZAP can reach it

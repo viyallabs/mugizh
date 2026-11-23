@@ -1,0 +1,15 @@
+# Keep the build context small and free of secrets and personal data (K-SEC-05).
+.git
+**/.env
+**/.env.*
+deploy/local/.secrets
+deploy/local/.env
+Resources/
+docs/
+apps/
+packages/
+infra/
+**/.terraform/
+**/*.tfstate*
+**/node_modules/
+.cache/

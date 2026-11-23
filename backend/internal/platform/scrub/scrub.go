@@ -91,6 +91,17 @@ func scrub(s string, shortCodes bool) string {
 // validators flags (for example a Verhoeff-valid 12-digit number). Used to reject input
 // (TC-20) as well as to scrub. Separators (space, hyphen) are ignored.
 func ContainsProhibitedID(s string, names []string) bool {
+	for _, m := range reDigitRun.FindAllString(prepare(s), -1) {
+		if idInDigits(digitsOnly(m), names) {
+			return true
+		}
+	}
+	return false
+}
+
+// idInDigits checks a digit string, and every 12- and 16-digit window of a longer one (a run
+// may join two numbers, "2345 6789 0124 9876543210"), against the named validators.
+func idInDigits(d string, names []string) bool {
 	check := func(d string) bool {
 		for _, name := range names {
 			if v, ok := validators[name]; ok && v(d) {
@@ -99,18 +110,13 @@ func ContainsProhibitedID(s string, names []string) bool {
 		}
 		return false
 	}
-	for _, m := range reDigitRun.FindAllString(s, -1) {
-		d := digitsOnly(m)
-		if check(d) {
-			return true
-		}
-		// A run may join two numbers ("2345 6789 0124 9876543210"); also test every
-		// window of 12 and 16 digits so a prohibited number inside a longer run is caught.
-		for _, w := range []int{12, 16} {
-			for i := 0; i+w <= len(d) && len(d) > w; i++ {
-				if check(d[i : i+w]) {
-					return true
-				}
+	if check(d) {
+		return true
+	}
+	for _, w := range []int{12, 16} {
+		for i := 0; i+w <= len(d) && len(d) > w; i++ {
+			if check(d[i : i+w]) {
+				return true
 			}
 		}
 	}
@@ -158,3 +164,18 @@ func Verhoeff(d string) bool {
 	}
 	return c == 0
 }
+
+// ContainsPhoneNumber reports whether s holds a phone-number-like run of 10 or more digits
+// (spaces, hyphens and a leading plus are ignored). Used to refuse contact details in
+// patient-written public text (review policy: no phone numbers).
+func ContainsPhoneNumber(s string) bool {
+	for _, m := range reDigitRun.FindAllString(prepare(s), -1) {
+		if len(digitsOnly(m)) >= 10 {
+			return true
+		}
+	}
+	return false
+}
+
+// ContainsEmail reports whether s holds an e-mail address.
+func ContainsEmail(s string) bool { return reEmail.MatchString(s) }

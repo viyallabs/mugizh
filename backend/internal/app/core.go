@@ -41,6 +41,7 @@ import (
 	"gitlab.com/viyallabs/mugizh/backend/internal/modules/payments"
 	"gitlab.com/viyallabs/mugizh/backend/internal/modules/payments/refundpolicy"
 	"gitlab.com/viyallabs/mugizh/backend/internal/modules/records"
+	"gitlab.com/viyallabs/mugizh/backend/internal/modules/reviews"
 	"gitlab.com/viyallabs/mugizh/backend/internal/modules/verification"
 	"gitlab.com/viyallabs/mugizh/backend/internal/platform/blobstore"
 	"gitlab.com/viyallabs/mugizh/backend/internal/platform/crypto"
@@ -49,6 +50,7 @@ import (
 	"gitlab.com/viyallabs/mugizh/backend/internal/platform/idempotency"
 	"gitlab.com/viyallabs/mugizh/backend/internal/platform/keys"
 	"gitlab.com/viyallabs/mugizh/backend/internal/platform/migrate"
+	"gitlab.com/viyallabs/mugizh/backend/internal/platform/telemetry"
 )
 
 // Settings come from the environment. Secrets are injected by the secrets manager as
@@ -69,7 +71,9 @@ type Settings struct {
 	// SchedulerURL and SchedulerToken reach scheduler-core's API; an empty URL uses the in-memory
 	// fake (local, test, dev only).
 	SchedulerURL, SchedulerToken string
-	TrustedProxies               int
+	// OTLPEndpoint is the telemetry collector (S-095), in India (R3); empty turns traces and metrics off.
+	OTLPEndpoint   string
+	TrustedProxies int
 	// Now replaces the clock of every module (end-to-end tests only; nil means the real clock).
 	// Never set from the environment.
 	Now func() time.Time
@@ -82,7 +86,8 @@ type Settings struct {
 func LoadSettings(getenv func(string) string) (Settings, error) {
 	s := Settings{Env: config.Env(getenv("APP_ENV")), HTTPAddr: getenv("HTTP_ADDR"), PackDir: getenv("MUGIZH_PACK_DIR"),
 		VendorRegister: getenv("MUGIZH_VENDOR_REGISTER"), QueueURL: getenv("MUGIZH_DB_URL_QUEUE"), KeystoreURL: getenv("MUGIZH_KEYSTORE_URL"),
-		BlobDir: getenv("MUGIZH_BLOB_DIR"), DBURL: map[string]string{}, SchedulerURL: getenv("MUGIZH_SCHEDULER_URL"), SchedulerToken: getenv("MUGIZH_SCHEDULER_TOKEN")}
+		BlobDir: getenv("MUGIZH_BLOB_DIR"), DBURL: map[string]string{}, SchedulerURL: getenv("MUGIZH_SCHEDULER_URL"), SchedulerToken: getenv("MUGIZH_SCHEDULER_TOKEN"),
+		OTLPEndpoint: getenv("MUGIZH_OTLP_ENDPOINT")}
 	if s.HTTPAddr == "" {
 		s.HTTPAddr = ":8080"
 	}
@@ -144,6 +149,7 @@ type Core struct {
 	Clinical     *clinical.Module
 	Rx           *clinical.Rx
 	Consult      *consult.Module
+	Reviews      *reviews.Module // F15; always built (erasure), routes only with the "reviews" flag
 	resolver     *lateResolver
 	BookingMsgs  *bookingMessages     // S-157 booking, consult and refund message composer
 	Scheduler    schedulerClient      // scheduler-core (reminder activities and occurrences)
@@ -330,6 +336,15 @@ func BuildCore(ctx context.Context, s Settings, log *slog.Logger) (*Core, error)
 		c.Close()
 		return nil, err
 	}
+	// S-209, S-214 (F15): built always, so erasure reaches it (K-DP-07); its routes are mounted only when
+	// the pack's "reviews" feature flag is on (ReviewsRoutes). Window, C, prior mean and platform minimum
+	// are the documented defaults ([CONFIRM] in reviews.Config).
+	rcfg := reviews.DefaultConfig()
+	rcfg.ProhibitedIDValidators = validators
+	if c.Reviews, err = reviews.New(c.Pools.For("reviews"), rcfg, reviews.Deps{Booking: c.Booking, Verifier: c.Verification, Crypto: c.Crypto}, log); err != nil {
+		c.Close()
+		return nil, err
+	}
 	if c.Scheduler, err = newSchedulerClient(s); err != nil {
 		c.Close()
 		return nil, err
@@ -377,7 +392,7 @@ func BuildCore(ctx context.Context, s Settings, log *slog.Logger) (*Core, error)
 		// Every module that holds patient data reports its erasure task (K-DP-07). An erasure
 		// stays restricted until all have reported, so a missing consumer can never produce a
 		// false "erased".
-		Modules:       []string{"records", "identity", "booking", "payments", "clinical", "consult", "notifications"},
+		Modules:       []string{"records", "identity", "booking", "payments", "clinical", "consult", "notifications", "reviews", "admin"},
 		RespondWithin: hours(24 * g.DataRightsResponseDays), RecordCopyWithin: hours(g.MedicalRecordCopyHours), AckWithin: hours(g.AcknowledgeHours),
 		UndoWindow:       7 * 24 * time.Hour, // [VALIDATE] decisions log
 		HoldRegistration: regHold, HoldProcessing: procHold, HoldProcessingFrom: procFrom,
@@ -398,7 +413,7 @@ func BuildCore(ctx context.Context, s Settings, log *slog.Logger) (*Core, error)
 	}
 	if s.Now != nil { // end-to-end tests: one clock for the whole system
 		for _, set := range []func(func() time.Time){c.Identity.SetClock, c.Records.SetClock, c.Verification.SetClock, c.Directory.SetClock,
-			c.Payments.SetClock, c.Booking.SetClock, c.Notify.SetClock, c.Consult.SetClock, c.Admin.SetClock, c.Audit.SetClock} {
+			c.Payments.SetClock, c.Booking.SetClock, c.Notify.SetClock, c.Consult.SetClock, c.Reviews.SetClock, c.Admin.SetClock, c.Audit.SetClock} {
 			set(s.Now)
 		}
 	}
@@ -411,6 +426,16 @@ func BuildCore(ctx context.Context, s Settings, log *slog.Logger) (*Core, error)
 		return nil, fmt.Errorf("erasure journal replay: %w", err)
 	}
 	return c, nil
+}
+
+// ReviewsRoutes returns the reviews module for mounting (Modules.Reviews) when the country pack's
+// "reviews" feature flag is on, and nil when it is off, so the review routes do not exist (404).
+// The module itself is always built, so erasure and the visit read model keep working.
+func (c *Core) ReviewsRoutes() *reviews.Module {
+	if c.Config != nil && c.Config.Flag("reviews") {
+		return c.Reviews
+	}
+	return nil
 }
 
 // Ready checks every pool.
@@ -426,7 +451,7 @@ func (c *Core) Ready(ctx context.Context) error {
 // MigrationSources lists the Core database migrations in order (bootstrap first).
 func MigrationSources() []migrate.Source {
 	return []migrate.Source{dbschema.Source(), audit.Source(), idempotency.Source(), identity.Source(), records.Source(),
-		verification.Source(), directory.Source(), payments.Source(), booking.Source(), notifications.Source(), admin.Source(), clinical.Source(), consult.Source()}
+		verification.Source(), directory.Source(), payments.Source(), booking.Source(), notifications.Source(), admin.Source(), clinical.Source(), consult.Source(), reviews.Source()}
 }
 
 // RequireTLS reports whether database connections must use TLS (everything except
@@ -439,3 +464,14 @@ const UploadMaxBytes = 10 << 20
 
 // EvidenceMaxBytes is the largest doctor identity or registration document (S-110).
 const EvidenceMaxBytes = 10 << 20
+
+// Telemetry starts trace and metric export for a service (S-095) and connects operational
+// alerts to the alert counter. Plain http to the collector is allowed only in local, test and dev.
+func (s Settings) Telemetry(ctx context.Context, service string) (*telemetry.Telemetry, error) {
+	t, err := telemetry.New(ctx, telemetry.Config{Service: service, Env: string(s.Env), Endpoint: s.OTLPEndpoint, AllowInsecure: s.devLike()})
+	if err != nil {
+		return nil, err
+	}
+	alertCounter.Store(t)
+	return t, nil
+}

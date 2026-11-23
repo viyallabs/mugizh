@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"gitlab.com/viyallabs/mugizh/backend/internal/platform/problem"
+	"gitlab.com/viyallabs/mugizh/backend/internal/platform/telemetry"
 )
 
 // Operational alerts (S-178; TM-25, TM-35, TM-38, TM-39, TM-51; K-SEC-02, K-SEC-08).
@@ -32,6 +33,8 @@ var (
 	alertMu     sync.Mutex
 	alertLast   = map[string]time.Time{}
 	alertsTotal atomic.Int64
+	// alertCounter also counts each alert as a metric once telemetry is set up (S-095).
+	alertCounter atomic.Pointer[telemetry.Telemetry]
 
 	// keyUnavailable is the answer while the key service is down (TM-39).
 	keyUnavailable = func() *problem.Problem {
@@ -52,6 +55,9 @@ func alertCode(code string) string {
 func raiseAlert(ctx context.Context, log *slog.Logger, code string, attrs ...any) {
 	code = alertCode(code)
 	alertsTotal.Add(1)
+	if t := alertCounter.Load(); t != nil {
+		t.Alert(ctx, code)
+	}
 	now := time.Now()
 	alertMu.Lock()
 	last, seen := alertLast[code]

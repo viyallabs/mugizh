@@ -40,16 +40,25 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	defer core.Close()
+	tel, err := s.Telemetry(ctx, "core-api")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = tel.Shutdown(sctx)
+	}()
 	pol, err := app.Specs()
 	if err != nil {
 		return err
 	}
 	go core.Records.Listen(ctx) // consent cache invalidation across instances
-	h := app.NewRouter(app.RouterConfig{Log: log, Crypto: core.Crypto, Auth: core.Identity, Idempotency: core.Idem,
+	h := app.NewRouter(app.RouterConfig{Log: log, Telemetry: tel, Crypto: core.Crypto, Auth: core.Identity, Idempotency: core.Idem,
 		TrustedProxies: s.TrustedProxies, Ready: core.Ready,
 		Mount: app.Mounts(app.Modules{Identity: core.Identity, Records: core.Records, Verification: core.Verification,
 			Directory: core.Directory, Booking: core.Booking, Payments: core.Payments, Notify: core.Notify, Rights: core.Rights,
-			Admin: core.Admin, Rx: core.Rx, Consult: core.Consult, Sharing: core.Sharing, History: core.History}, pol, log, time.Now),
+			Admin: core.Admin, Rx: core.Rx, Consult: core.Consult, Reviews: core.ReviewsRoutes(), Sharing: core.Sharing, History: core.History}, pol, log, time.Now),
 		Raw: []func(chi.Router){func(r chi.Router) {
 			// Signed callbacks that authenticate themselves (vendor webhook, scheduler-core).
 			r.Post("/webhooks/payments/{clinicLinkRef}", core.Payments.WebhookHandler().ServeHTTP)

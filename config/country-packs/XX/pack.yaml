@@ -118,3 +118,4 @@ features:
   sos: true
   family_profiles: false
   prescription_scan: false
+  reviews: true

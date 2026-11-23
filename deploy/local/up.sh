@@ -23,7 +23,7 @@ env_file="$here/.env"
   echo "MUGIZH_LOCAL_ROOT_KEY=$(head -c 32 /dev/urandom | base64)"
   echo "MUGIZH_SCHEDULER_CALLBACK_SECRET=$(head -c 32 /dev/urandom | base64)"
 } > "$env_file"
-roles="admin audit booking clinical consult directory identity notifications payments platform records verification"
+roles="admin audit booking clinical consult directory identity notifications payments platform records reviews verification"
 sql=""
 for m in $roles queue keystore; do
   pw="$(head -c 18 /dev/urandom | base64 | tr -d '/+=')"

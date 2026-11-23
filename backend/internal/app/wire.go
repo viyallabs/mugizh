@@ -25,13 +25,15 @@ import (
 	payapi "gitlab.com/viyallabs/mugizh/backend/internal/modules/payments/httpapi"
 	"gitlab.com/viyallabs/mugizh/backend/internal/modules/records"
 	recapi "gitlab.com/viyallabs/mugizh/backend/internal/modules/records/httpapi"
+	"gitlab.com/viyallabs/mugizh/backend/internal/modules/reviews"
+	revapi "gitlab.com/viyallabs/mugizh/backend/internal/modules/reviews/httpapi"
 	"gitlab.com/viyallabs/mugizh/backend/internal/modules/verification"
 	verapi "gitlab.com/viyallabs/mugizh/backend/internal/modules/verification/httpapi"
 )
 
 // SpecDocs loads every module's embedded OpenAPI spec.
 func SpecDocs() ([]*openapi3.T, error) {
-	loaders := []func() (*openapi3.T, error){idapi.GetSpec, recapi.GetSpec, verapi.GetSpec, dirapi.GetSpec, bookapi.GetSpec, payapi.GetSpec, notapi.GetSpec, admapi.GetSpec, clinapi.GetSpec, conapi.GetSpec}
+	loaders := []func() (*openapi3.T, error){idapi.GetSpec, recapi.GetSpec, verapi.GetSpec, dirapi.GetSpec, bookapi.GetSpec, payapi.GetSpec, notapi.GetSpec, admapi.GetSpec, clinapi.GetSpec, conapi.GetSpec, revapi.GetSpec}
 	specs := make([]*openapi3.T, 0, len(loaders))
 	for _, l := range loaders {
 		s, err := l()
@@ -67,6 +69,7 @@ type Modules struct {
 	Admin        *admin.Module
 	Rx           *clinical.Rx
 	Consult      *consult.Module
+	Reviews      *reviews.Module // mount only when the "reviews" flag is on (Core.ReviewsRoutes)
 	Sharing      *records.Sharing
 	History      *clinical.History
 }
@@ -128,6 +131,14 @@ func Mounts(m Modules, pol Policies, log *slog.Logger, now func() time.Time) []f
 				[]conapi.StrictMiddlewareFunc{conapi.StrictMiddlewareFunc(PolicyMiddleware[conapi.StrictHandlerFunc](pol, now))},
 				conapi.StrictHTTPServerOptions{RequestErrorHandlerFunc: RequestError, ResponseErrorHandlerFunc: ResponseError(log)})
 			conapi.HandlerWithOptions(si, conapi.ChiServerOptions{BaseRouter: r, ErrorHandlerFunc: RequestError})
+		})
+	}
+	if m.Reviews != nil {
+		out = append(out, func(r chi.Router) {
+			si := revapi.NewStrictHandlerWithOptions(revapi.Handlers{M: m.Reviews},
+				[]revapi.StrictMiddlewareFunc{revapi.StrictMiddlewareFunc(PolicyMiddleware[revapi.StrictHandlerFunc](pol, now))},
+				revapi.StrictHTTPServerOptions{RequestErrorHandlerFunc: RequestError, ResponseErrorHandlerFunc: ResponseError(log)})
+			revapi.HandlerWithOptions(si, revapi.ChiServerOptions{BaseRouter: r, ErrorHandlerFunc: RequestError})
 		})
 	}
 	if m.Admin != nil {

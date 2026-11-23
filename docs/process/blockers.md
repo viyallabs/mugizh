@@ -14,6 +14,7 @@ What stops stories from reaching Done, who can unblock each, and what is built i
 | F4 | Accept the residual risk that an offline lost phone shows its backup reminders until it reconnects or 72 h pass | S-165 sign-off | Wipe push on remote sign-out | D-69 |
 | F5 | Rename "India" API fields to "consult country" before the first app release | API freeze | Behaviour already pack-driven | D-72 |
 | F6 | Staff sign-in method (SSO + phishing-resistant factor) | S-128, S-172 screens, staff-role attack tests in S-181 | Staff roles fail closed; support lookup API | D-21, D-57 |
+| F8 | **Review moderation vs K-SEC-08 (S-213):** moderators are staff reading a patient's unpublished review text; K-SEC-08 allows staff access to patient data only through just-in-time grants (per patient, approved). Options: (a) a moderation grant type covering the queue for a shift, approved and audited; (b) treat text the patient submitted for publication as outside K-SEC-08 [needs an ADR]; (c) automatic checks only, no human reading [policy change] | S-213, review text publication | Ratings publish; text held sealed (D-81) | K-SEC-08, D-81 |
 | F7 | New [CONFIRM] items from S-178/S-185: erasure-journal retention; strictness of the link rule for names ("Dr.Kumar" refused); residual one-minute window if a journal write fails just before a restore point | Approval | Built with the proposed behaviour | D-74, D-77 |
 
 ## 2. Doctor, lawyer and CA reviews

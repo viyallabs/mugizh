@@ -30,9 +30,11 @@ import (
 	ap "gitlab.com/viyallabs/mugizh/backend/internal/modules/audit/public"
 	bp "gitlab.com/viyallabs/mugizh/backend/internal/modules/booking/public"
 	dp "gitlab.com/viyallabs/mugizh/backend/internal/modules/directory/public"
+	ip "gitlab.com/viyallabs/mugizh/backend/internal/modules/identity/public"
 	pp "gitlab.com/viyallabs/mugizh/backend/internal/modules/payments/public"
 	rp "gitlab.com/viyallabs/mugizh/backend/internal/modules/records/public"
 	"gitlab.com/viyallabs/mugizh/backend/internal/platform/db"
+	"gitlab.com/viyallabs/mugizh/backend/internal/platform/httpx"
 	"gitlab.com/viyallabs/mugizh/backend/internal/platform/migrate"
 	"gitlab.com/viyallabs/mugizh/backend/internal/platform/outbox"
 )
@@ -204,8 +206,15 @@ type querier interface {
 }
 
 func (m *Module) audit(ctx context.Context, tx pgx.Tx, actorRef, role, action, subject, apptRef, requestID string) error {
-	return ap.Record(ctx, tx, ap.Event{ActorRef: actorRef, ActorRole: role, Action: action, SubjectRef: subject,
-		ResourceType: "appointment", ResourceRef: apptRef, Result: ap.Allowed, RequestID: requestID})
+	ev := ap.Event{ActorRef: actorRef, ActorRole: role, Action: action, SubjectRef: subject,
+		ResourceType: "appointment", ResourceRef: apptRef, Result: ap.Allowed, RequestID: requestID}
+	// TM-06: say which app and network did it (keyed IP hash, never the IP), as records does.
+	// System and event-driven changes have neither.
+	ev.IPHash = httpx.IPHash(ctx)
+	if p, ok := ip.FromContext(ctx); ok && p != nil {
+		ev.Client = string(p.App) + "-app"
+	}
+	return ap.Record(ctx, tx, ev)
 }
 
 func (m *Module) emit(ctx context.Context, tx pgx.Tx, typ, subject string, payload map[string]string) error {

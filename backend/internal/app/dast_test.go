@@ -42,5 +42,5 @@ func TestDASTServer(t *testing.T) {
 	t.Logf("DAST target ready on %s for %s", os.Getenv("MUGIZH_DAST_ADDR"), serve)
 	ctx, cancel := context.WithTimeout(context.Background(), serve)
 	defer cancel()
-	<-ctx.Done()
+	serveUntilStopped(ctx)
 }

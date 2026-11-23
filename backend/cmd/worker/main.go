@@ -39,6 +39,15 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	defer core.Close()
+	tel, err := s.Telemetry(ctx, "core-worker") // alerts become metrics too (S-095)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = tel.Shutdown(sctx)
+	}()
 	qpool, err := db.Open(ctx, s.QueueURL, db.Options{MaxConns: 10, RequireTLS: s.RequireTLS(), SearchPath: outbox.QueueSchema})
 	if err != nil {
 		return err
@@ -83,6 +92,8 @@ func run(log *slog.Logger) error {
 		_, err := core.Consult.PurgeParticipantRefs(ctx, time.Now())
 		return err
 	})
+	// S-189: feedback is kept one year from receipt [CONFIRM], then deleted.
+	go every(ctx, log, 24*time.Hour, "admin.purge_feedback", func(ctx context.Context) error { _, err := core.Admin.PurgeFeedback(ctx); return err })
 	go every(ctx, log, 6*time.Hour, "booking.materialise_slots", func(ctx context.Context) error { _, err := core.Booking.MaterialiseSlots(ctx, time.Now()); return err })
 	go every(ctx, log, 5*time.Minute, "booking.reconfirmations", func(ctx context.Context) error {
 		_, err := core.Booking.SweepReconfirmations(ctx, time.Now())

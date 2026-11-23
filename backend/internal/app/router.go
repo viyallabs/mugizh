@@ -19,6 +19,7 @@ import (
 	"gitlab.com/viyallabs/mugizh/backend/internal/platform/idempotency"
 	"gitlab.com/viyallabs/mugizh/backend/internal/platform/logging"
 	"gitlab.com/viyallabs/mugizh/backend/internal/platform/problem"
+	"gitlab.com/viyallabs/mugizh/backend/internal/platform/telemetry"
 )
 
 // StrictHandler is the signature every generated strict handler shares.
@@ -149,6 +150,8 @@ type RouterConfig struct {
 	// Raw registers routes outside the user-facing chain (no sign-in, no replay cache):
 	// signed callbacks from vendors and scheduler-core, which authenticate themselves.
 	Raw []func(r chi.Router)
+	// Telemetry records a span and a duration per request (S-095); nil means none.
+	Telemetry *telemetry.Telemetry
 	// Now is the clock for policy checks (step-up age); nil means time.Now.
 	Now func() time.Time
 }
@@ -174,7 +177,11 @@ func NewRouter(c RouterConfig) http.Handler {
 		panic(err)
 	}
 	r := chi.NewRouter()
-	r.Use(httpx.IDs(c.TrustedProxies), httpx.Recover(c.Log), httpx.SecurityHeaders, httpx.AccessLog(c.Log),
+	r.Use(httpx.IDs(c.TrustedProxies))
+	if c.Telemetry != nil {
+		r.Use(c.Telemetry.HTTP)
+	}
+	r.Use(httpx.Recover(c.Log), httpx.SecurityHeaders, httpx.AccessLog(c.Log),
 		httpx.LimitBodyFor(httpx.MaxBody, map[string]int64{
 			"/v1/me/documents": UploadMaxBytes + 64<<10,
 			// Doctor identity evidence arrives as base64 JSON (about 4/3 of the file size, review M7).

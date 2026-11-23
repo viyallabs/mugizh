@@ -19,7 +19,7 @@ import (
 // scheduler-core has its own database and is not listed (B10).
 var Modules = []string{
 	"admin", "audit", "booking", "clinical", "consult", "directory", "identity",
-	"notifications", "payments", "platform", "records", "verification",
+	"notifications", "payments", "platform", "records", "reviews", "verification",
 }
 
 // RolePrefix namespaces database roles, which are cluster-wide in PostgreSQL.

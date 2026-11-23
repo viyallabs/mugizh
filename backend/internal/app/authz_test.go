@@ -124,9 +124,11 @@ func TestS116GeneratedAuthorisationSuite(t *testing.T) {
 		t.Fatal(err)
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	// Reviews are mounted directly (not through ReviewsRoutes): the suite checks every operation of every spec, and the
+	// IN pack keeps the "reviews" flag off. The flag-off 404 is covered by TestJourneyReviewRoutesAre404OnTheINPack.
 	h := app.NewRouter(app.RouterConfig{Log: log, Crypto: c.Crypto, Auth: c.Identity, Idempotency: c.Idem, IPPerMinute: 1_000_000, UserPerMinute: 1_000_000,
 		Mount: app.Mounts(app.Modules{Identity: c.Identity, Records: c.Records, Rights: c.Rights, Verification: c.Verification,
-			Directory: c.Directory, Booking: c.Booking, Payments: c.Payments, Notify: c.Notify, Admin: c.Admin, Rx: c.Rx, Consult: c.Consult, Sharing: c.Sharing, History: c.History}, pol, log, time.Now)})
+			Directory: c.Directory, Booking: c.Booking, Payments: c.Payments, Notify: c.Notify, Admin: c.Admin, Rx: c.Rx, Consult: c.Consult, Reviews: c.Reviews, Sharing: c.Sharing, History: c.History}, pol, log, time.Now)})
 	srv := httptest.NewServer(h)
 	defer srv.Close()
 

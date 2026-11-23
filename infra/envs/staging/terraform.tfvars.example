@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars (git-ignored by *.tfvars rules if added) and fill. No secrets here.
+account_id                = "[FILL]"
+owner                     = "[FILL]"
+certificate_arn           = "[FILL]"
+image_tag                 = "[FILL]"
+gitlab_project_path       = "[FILL]"
+oidc_provider_thumbprints = ["[FILL]"]
+alert_endpoint            = "[FILL]"

@@ -87,3 +87,19 @@ func TestFreeTextRemovesShortCodes(t *testing.T) {
 		t.Fatal("harmless short numbers must survive Text")
 	}
 }
+
+func TestContainsPhoneNumberAndEmail(t *testing.T) {
+	for _, s := range []string{"call 98765 43210 now", "+91-98765-43210", "9876543210", "tel 0 98765 43210"} {
+		if !ContainsPhoneNumber(s) {
+			t.Errorf("phone not found in %q", s)
+		}
+	}
+	for _, s := range []string{"waited 45 minutes", "room 12, floor 3", "paid 1500 rupees", "visit on 2026 11 20"} {
+		if ContainsPhoneNumber(s) {
+			t.Errorf("false phone in %q", s)
+		}
+	}
+	if !ContainsEmail("write to a.b@example.org please") || ContainsEmail("no address here") {
+		t.Error("email detection")
+	}
+}

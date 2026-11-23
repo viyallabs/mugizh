@@ -9,7 +9,7 @@ import (
 )
 
 // moduleSchemas are the schema names of the module map (module-boundaries-and-domain-model.md §2).
-var moduleSchemas = []string{"admin", "audit", "booking", "clinical", "consult", "directory", "identity", "notifications", "payments", "platform", "records", "verification"}
+var moduleSchemas = []string{"admin", "audit", "booking", "clinical", "consult", "directory", "identity", "notifications", "payments", "platform", "records", "reviews", "verification"}
 
 var migrationName = regexp.MustCompile(`^\d{4}_[a-z0-9_]+\.(up|down)\.sql$`)
 

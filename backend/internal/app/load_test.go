@@ -81,5 +81,5 @@ func TestLoadServer(t *testing.T) {
 	}
 	c, cancel := context.WithTimeout(ctx, serve)
 	defer cancel()
-	<-c.Done()
+	serveUntilStopped(c)
 }

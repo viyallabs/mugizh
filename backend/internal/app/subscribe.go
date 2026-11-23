@@ -10,6 +10,7 @@ import (
 	ip "gitlab.com/viyallabs/mugizh/backend/internal/modules/identity/public"
 	pp "gitlab.com/viyallabs/mugizh/backend/internal/modules/payments/public"
 	"gitlab.com/viyallabs/mugizh/backend/internal/modules/records"
+	rvp "gitlab.com/viyallabs/mugizh/backend/internal/modules/reviews/public"
 	"gitlab.com/viyallabs/mugizh/backend/internal/platform/outbox"
 )
 
@@ -54,6 +55,9 @@ func Subscribe(bus *outbox.Bus, c *Core) {
 	bus.Subscribe(cp.SubscriberAppointmentRescheduled, bp.EventRescheduled, c.Consult.OnAppointmentRescheduled)
 	bus.Subscribe(cp.SubscriberAppointmentCancelled, bp.EventCancelled, c.Consult.OnAppointmentCancelled)
 	bus.Subscribe("admin.consult_minor_flagged", cp.EventMinorFlagged, c.Admin.OnMinorFlagged)
+	// Reviews: the eligibility read model (rule B5) is built from completed appointments, however they
+	// were completed (staff mark for in-person, consult outcome for online; both emit appointment.completed).
+	bus.Subscribe(rvp.SubscriberAppointmentCompleted, bp.EventCompleted, c.Reviews.OnAppointmentCompleted)
 	// Patient messages (S-157, D-35): booking changes, reminders and refunds, composed at send
 	// time; booking events never mention money, refund events say exactly what was decided.
 	bm := c.BookingMsgs
@@ -99,6 +103,8 @@ func Subscribe(bus *outbox.Bus, c *Core) {
 		{"payments", c.Payments.OnErasureRequested, c.Payments.OnErasureDue, c.Payments.OnErasureCancelled},
 		{"clinical", c.Rx.OnErasureRequested, c.Rx.OnErasureDue, c.Rx.OnErasureCancelled},
 		{"consult", c.Consult.OnErasureRequested, c.Consult.OnErasureDue, c.Consult.OnErasureCancelled},
+		{"reviews", c.Reviews.OnErasureRequested, c.Reviews.OnErasureDue, c.Reviews.OnErasureCancelled},
+		{"admin", c.Admin.OnErasureRequested, c.Admin.OnErasureDue, c.Admin.OnErasureCancelled},
 		{"notifications", c.Notify.OnErasureRequested, c.Notify.OnErasureDue, c.Notify.OnErasureCancelled},
 	}
 	for _, e := range erasure {
@@ -119,4 +125,4 @@ func Subscribe(bus *outbox.Bus, c *Core) {
 }
 
 // RelayModules are the modules whose event_outbox the worker relays.
-var RelayModules = []string{"admin", "booking", "clinical", "consult", "directory", "identity", "notifications", "payments", "records", "verification"}
+var RelayModules = []string{"admin", "booking", "clinical", "consult", "directory", "identity", "notifications", "payments", "records", "reviews", "verification"}

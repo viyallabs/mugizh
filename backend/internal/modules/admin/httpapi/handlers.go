@@ -346,3 +346,157 @@ func (h Handlers) LookupAccount(ctx context.Context, req LookupAccountRequestObj
 	}
 	return LookupAccount200JSONResponse{AccountId: id, ActiveDevices: sum.ActiveDevices, CreatedOn: openapi_types.Date{Time: day}, Roles: roles}, nil
 }
+
+func feedbackUser(ctx context.Context) (pub.User, error) {
+	p, err := principal(ctx)
+	if err != nil {
+		return pub.User{}, err
+	}
+	return pub.User{Ref: p.UserID, Role: p.ActingRole, RequestID: httpx.RequestID(ctx)}, nil
+}
+
+func optStr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func optPlatform(s string) *FeedbackPlatform {
+	if s == "" {
+		return nil
+	}
+	p := FeedbackPlatform(s)
+	return &p
+}
+
+func toDiagnostics(d *pub.FeedbackDiagnostics) *FeedbackDiagnostics {
+	if d == nil {
+		return nil
+	}
+	out := &FeedbackDiagnostics{LastErrorCode: optStr(d.LastErrorCode), OsVersion: optStr(d.OSVersion)}
+	if d.NetworkType != "" {
+		n := FeedbackDiagnosticsNetworkType(d.NetworkType)
+		out.NetworkType = &n
+	}
+	return out
+}
+
+func fromDiagnostics(d *FeedbackDiagnostics) *pub.FeedbackDiagnostics {
+	if d == nil {
+		return nil
+	}
+	out := &pub.FeedbackDiagnostics{}
+	if d.LastErrorCode != nil {
+		out.LastErrorCode = *d.LastErrorCode
+	}
+	if d.OsVersion != nil {
+		out.OSVersion = *d.OsVersion
+	}
+	if d.NetworkType != nil {
+		out.NetworkType = string(*d.NetworkType)
+	}
+	return out
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+// CreateFeedback records the caller's feedback or bug report (S-189), any signed-in role.
+func (h Handlers) CreateFeedback(ctx context.Context, req CreateFeedbackRequestObject) (CreateFeedbackResponseObject, error) {
+	u, err := feedbackUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errInvalid
+	}
+	b := req.Body
+	in := pub.FeedbackInput{Kind: string(b.Kind), Message: b.Message, Screen: deref(b.Screen), AppVersion: deref(b.AppVersion), Diagnostics: fromDiagnostics(b.Diagnostics)}
+	if b.Platform != nil {
+		in.Platform = string(*b.Platform)
+	}
+	r, err := h.M.SubmitFeedback(ctx, u, in)
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	return CreateFeedback201JSONResponse(FeedbackReceipt{FeedbackId: uuid.MustParse(r.ID), Reference: r.Reference, ReceivedAt: r.ReceivedAt}), nil
+}
+
+// ListMyFeedback lists the caller's own feedback with their own message.
+func (h Handlers) ListMyFeedback(ctx context.Context, req ListMyFeedbackRequestObject) (ListMyFeedbackResponseObject, error) {
+	u, err := feedbackUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+	limit, cursor := 0, ""
+	if req.Params.Limit != nil {
+		limit = *req.Params.Limit
+	}
+	if req.Params.Cursor != nil {
+		cursor = *req.Params.Cursor
+	}
+	items, next, err := h.M.MyFeedback(ctx, u, limit, cursor)
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	out := ListMyFeedback200JSONResponse{Items: make([]Feedback, 0, len(items))}
+	for _, i := range items {
+		out.Items = append(out.Items, Feedback{FeedbackId: uuid.MustParse(i.ID), Reference: i.Reference, Kind: FeedbackKind(i.Kind), Message: i.Message,
+			Screen: optStr(i.Screen), AppVersion: optStr(i.AppVersion), Platform: optPlatform(i.Platform), Diagnostics: toDiagnostics(i.Diagnostics),
+			Status: FeedbackStatus(i.Status), ReceivedAt: i.ReceivedAt})
+	}
+	if next != "" {
+		out.NextCursor = &next
+	}
+	return out, nil
+}
+
+// ListFeedbackForTriage lists feedback for support without the message. Staff sign-in does not
+// exist yet (D-21), so this is unreachable over HTTP until it does.
+func (h Handlers) ListFeedbackForTriage(ctx context.Context, req ListFeedbackForTriageRequestObject) (ListFeedbackForTriageResponseObject, error) {
+	s, err := staff(ctx)
+	if err != nil {
+		return nil, err
+	}
+	limit, cursor := 0, ""
+	if req.Params.Limit != nil {
+		limit = *req.Params.Limit
+	}
+	if req.Params.Cursor != nil {
+		cursor = *req.Params.Cursor
+	}
+	items, next, err := h.M.FeedbackQueue(ctx, s, cursor, limit)
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	out := ListFeedbackForTriage200JSONResponse{Items: make([]FeedbackTriage, 0, len(items))}
+	for _, i := range items {
+		out.Items = append(out.Items, FeedbackTriage{FeedbackId: uuid.MustParse(i.ID), Reference: i.Reference, Kind: FeedbackKind(i.Kind),
+			Screen: optStr(i.Screen), AppVersion: optStr(i.AppVersion), Platform: optPlatform(i.Platform), Diagnostics: toDiagnostics(i.Diagnostics),
+			Status: FeedbackStatus(i.Status), ReceivedAt: i.ReceivedAt})
+	}
+	if next != "" {
+		out.NextCursor = &next
+	}
+	return out, nil
+}
+
+// SetFeedbackStatus marks feedback triaged or closed (support).
+func (h Handlers) SetFeedbackStatus(ctx context.Context, req SetFeedbackStatusRequestObject) (SetFeedbackStatusResponseObject, error) {
+	s, err := staff(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, errInvalid
+	}
+	if err := h.M.SetFeedbackStatus(ctx, s, req.FeedbackId.String(), string(req.Body.Status)); err != nil {
+		return nil, mapErr(err)
+	}
+	return SetFeedbackStatus204Response{}, nil
+}

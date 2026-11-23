@@ -156,6 +156,44 @@ Every mitigation for TM-01 to TM-51 was traced to code and to a test whose body 
 - Secrets: Gitleaks finds only the git-ignored local `.env`.
 - Local stack: migrated forward (records 0005, identity 0006); the API started with the start-up replay; readiness 200; new routes answer 401 to anonymous callers before parsing.
 
+## 6b. Sixth round (2026-11-23): reviews module (S-209 backend, S-214)
+
+Built by a Sonnet agent to a fixed brief (D-80 to D-82), reviewed line by line by Opus.
+
+| # | Sev | Finding | Status | Regression test |
+|---|---|---|---|---|
+| R6-1 | **Medium** | A doctor who booked their own practice as a patient could rate themselves (manipulated reviews; NMC guidelines, CD-08) | Fixed: a visit whose doctor is the reviewer is not eligible | `TestCD08DoctorCannotReviewThemselves` |
+
+**Checked and fine:**
+- Unknown or another patient's appointment answers 404, through booking's public interface. There are no cross-schema reads.
+- One review per visit is enforced by a unique constraint, with `ON CONFLICT` under concurrency.
+- The aggregate moves in the same transaction as create, withdraw and erasure, and is CHECKed non-negative.
+- Text is trimmed and checked for control and format characters, identity numbers, phone numbers, e-mail addresses, links and markup before it is sealed with the patient key under a row-bound AAD.
+- Text is never logged, never published and returned only to its author. Audit rows carry no text.
+- The public rating needs a Verified doctor (K-CS-01) and has no commercial input (CD-05).
+- Erasure step 1 deletes and adjusts the aggregate; step 2 sweeps; both are idempotent.
+- Routes exist only with the pack flag (IN off → 404). The generated authorisation suite covers the new operations.
+
+**Residual:**
+- Withdrawing and re-reviewing inside the 14-day window is allowed (D-80).
+- The platform mean is computed on each rating read, which is fine at v1.1 volumes. Add a cached platform row if `GET /v1/doctors/{id}/rating` becomes hot.
+
+## 6c. Seventh round (2026-11-23): agent reviews of S-095, S-189 and TM-06
+
+| # | Sev | Finding | Status | Regression test |
+|---|---|---|---|---|
+| R7-1 | **Medium** | Identity and phone numbers split across line breaks or punctuation, or typed in Devanagari digits, passed every free-text check (K-DP-05), in every module | Fixed (D-86): digits normalised everywhere; strict joining for feedback and review text | `TestDigitHardening`, `TestS189ReviewFixesRefuseHiddenNumbersAndDomains` |
+| R7-2 | Medium | Feedback erasure step 1 reported "deleted" or "restricted RET-09" depending on whether feedback existed | Fixed: one rule (RET-09 whenever grievances are kept; "none" when nothing is held) | `TestS189ErasureOutcomeIsConsistent` |
+| R7-3 | Medium | A user's own feedback list returned blank messages on a key outage instead of a 503 (TM-39) | Fixed: only a destroyed key is tolerated | — |
+| R7-4 | Low | Feedback code fields (app version, OS version, error code) could carry a number | Fixed | `TestS189ReviewFixesRefuseHiddenNumbersAndDomains` |
+| R7-5 | Low | A 40-bit feedback reference clash gave a 500 | Fixed: retried with a new reference | — |
+| R7-6 | Low | Bare domains accepted in feedback | Fixed: strict link rule | same |
+| R7-7 | Low | A client's traceparent decided whether it was sampled | Fixed: server-side random sampling | `TestS095SamplingIgnoresTheTraceID` |
+| R7-8 | Low | An aborted request left its span unended | Fixed: deferred | — |
+| R7-9 | Low | OpenTelemetry modules marked indirect in go.mod | Fixed: `go mod tidy`; CI job `go-mod-tidy` added | — |
+
+TM-06 (booking audit context) and the alert catalogue in production-readiness.md were checked and found correct.
+
 ## 7. Open before real patient data (also in the build decisions log)
 
 Staff SSO (D-21); cloud KMS, S3, SMS gateway, e-signature, payment aggregator, video and malware-scan adapters (only fakes exist); the CA-approved tax file (patient documents stay off in production) and our subscription invoices; the doctor-approved drug table and rules; in-person identity confirmation (D-39); follow-up and refill facts (D-41); account recovery without a device (E-DP-23, [CONFIRM]); the [CONFIRM] and [VALIDATE] items in the decisions log; independent VAPT (S-183).

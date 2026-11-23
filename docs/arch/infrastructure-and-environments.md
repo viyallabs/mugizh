@@ -139,3 +139,7 @@ The founder chose **OCI for development** and **AWS for staging, production and 
 - **Section 4** (residency R1 to R7): applies to production, DR and staging on AWS. Dev holds no personal data.
 - **New rule set** for keeping the two clouds equal: [adr-decisions.md](adr-decisions.md) §6.3. The key points: a `keys` interface per cloud, no cloud secrets SDK in app code, S3-compatible storage, the same PostgreSQL version and extensions, the same container images, and no cloud-specific managed service in app code.
 - **OCI service names and India-region availability are not yet checked** (managed PostgreSQL with PostGIS, key vault, object storage, containers). Check them before S-093 [VALIDATE].
+
+## 10. Built in S-093 (2026-11-23)
+
+OpenTofu for AWS staging, production and DR (Mumbai `ap-south-1`, Hyderabad `ap-south-2`) is in [`infra/`](../../infra/README.md): the organisation region-deny policy (R1), network with the egress allow-list, KMS multi-region keys, RDS PostgreSQL 17 (core and key store as separate instances), S3 buckets including the Object Lock `worm` bucket, ECS Fargate, ALB with WAF, GitLab OIDC deploy roles, and alarms. It passes `tofu validate` and Trivy config scan but **has not been applied** (no accounts, blocker V1). Dev on OCI is not built. The README maps R1 to R7 to the resources and lists what is still manual, including the DR compute and database, which are restored at failover. Items marked [VALIDATE] and [CONFIRM] there are open.
